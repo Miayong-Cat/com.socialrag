@@ -1,0 +1,92 @@
+venv/
+__pycache__/
+*.pyc
+.env
+
+# secrets / credentials — env files
+.env.*
+!.env.example
+.envrc
+
+# keys, certs, keystores
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.der
+*.jks
+*.keystore
+*.asc
+*.gpg
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+*.pub
+
+# cloud provider credentials
+.aws/
+**/.aws/credentials
+.azure/
+gcloud/
+*-service-account*.json
+*service-account-key*.json
+*.serviceaccount.json
+gcp-key*.json
+
+# generic secret/credential patterns
+*credentials*.json
+*credentials*.yml
+*credentials*.yaml
+*secret*
+*.secrets
+config.local.*
+settings.local.*
+*_rsa
+*.env.bak
+
+# database dumps (may contain real data)
+*.sql.gz
+*.dump
+*.bak
+*.sqlite3
+*.db
+
+# infra state (can contain secrets in plain text)
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# docker / kube secrets
+docker-compose.override.yml
+*.kubeconfig
+
+# API tokens / auth token caches
+.netrc
+.npmrc
+token.json
+tokens.json
+auth.json
+*.token
+
+# editor/OS files that sometimes leak local paths or secrets
+.vscode/settings.json
+.idea/
+
+# python extras
+.venv/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# vector DB
+.chroma/
+chroma_db/
+
+# data (원본 PDF·정제 결과는 커밋하지 않음)
+data/raw/
+data/processed/
