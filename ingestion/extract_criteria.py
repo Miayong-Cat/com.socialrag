@@ -1,9 +1,9 @@
-"""0단계 스파이크: 기준 중위소득·급여별 선정기준표를 텍스트에서 뽑아 JSON으로 저장.
+"""[적재 1/3] 기준 중위소득·급여별 선정기준표를 PDF에서 뽑아 JSON으로 저장.
 
-선 기반 표 추출은 셀이 어긋나서(table_scout.py 결과), 페이지 텍스트를 정규식으로 읽는다.
+선 기반 표 추출은 셀이 어긋나서(spike/README.md), 페이지 텍스트를 정규식으로 읽는다.
 
 사용법:
-    python spike/parse_criteria.py
+    python -m ingestion.extract_criteria
 결과:
     data/processed/criteria_2026.json
 """

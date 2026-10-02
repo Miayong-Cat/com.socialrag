@@ -22,3 +22,13 @@ class WelfareProgram(Base):
     source_document: Mapped[str]                     # 예: "2026 국민기초생활보장 사업안내"
     source_page: Mapped[int | None]
     updated_year: Mapped[int]                        # 기준 연도 (매년 바뀜)
+
+
+class MedianIncome(Base):
+    """연도·가구원 수별 기준 중위소득(원/월). 급여별 선정기준 금액 = 이 값 × 비율(반올림)."""
+
+    __tablename__ = "median_incomes"
+
+    year: Mapped[int] = mapped_column(primary_key=True)
+    household_size: Mapped[int] = mapped_column(primary_key=True)  # 1 ~ 8 (9인 이상은 판정 엔진이 계산)
+    amount: Mapped[int]

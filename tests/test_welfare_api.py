@@ -1,19 +1,8 @@
-"""복지제도 CRUD API 테스트.
-
-실제 data/app.db는 건드리지 않고, 테스트마다 빈 메모리 DB를 새로 만들어 쓴다.
+"""복지제도 CRUD API 테스트. (DB·클라이언트 준비는 conftest.py)
 
 실행:
     pytest
 """
-
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from app.database import Base, get_db
-from app.main import app
 
 SAMPLE = {
     "name": "생계급여",
@@ -24,26 +13,6 @@ SAMPLE = {
     "source_page": 14,
     "updated_year": 2026,
 }
-
-
-@pytest.fixture
-def client():
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
-
-    def get_test_db():
-        db = TestSession()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[get_db] = get_test_db
-    yield TestClient(app)
-    app.dependency_overrides.clear()
 
 
 def test_create_and_get(client):

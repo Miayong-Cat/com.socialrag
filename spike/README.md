@@ -17,14 +17,14 @@
 | 파일 | 하는 일 | 실행 |
 |---|---|---|
 | `table_scout.py` | 키워드가 나오는 페이지 찾기 / 페이지 표 덤프 | `python spike/table_scout.py [쪽번호...]` |
-| `parse_criteria.py` | 기준 중위소득·급여별 선정기준 → JSON | `python spike/parse_criteria.py` |
+| ~~`parse_criteria.py`~~ | 2단계에서 `ingestion/extract_criteria.py`로 옮김 | `python -m ingestion.extract_criteria` |
 
 - 입력: `data/raw/2026_국민기초생활보장_사업안내.pdf` (p.14, 인쇄 xii쪽)
 - 출력: `data/processed/criteria_2026.json`
 
 ## 검증 방법
 
-`parse_criteria.py`는 저장 전에 원문 숫자끼리 맞는지 확인한다.
+`ingestion/extract_criteria.py`는 저장 전에 원문 숫자끼리 맞는지 확인한다.
 
 - 급여별 선정기준 = 기준 중위소득 × 비율(32·40·48·50%) — **원 단위 반올림** (버림 아님)
 - 생계급여 8인 이상 증가액 = 기준 중위소득 증가액 × 32%
