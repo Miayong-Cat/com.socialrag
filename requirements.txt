@@ -1,0 +1,12 @@
+# 0단계 스파이크 (PDF 읽기)
+pdfplumber==0.11.10
+pymupdf==1.28.2
+
+# 1단계 API 서버
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+sqlalchemy==2.1.2
+
+# 테스트
+pytest==9.1.1
+httpx2==2.13.1  # TestClient가 사용

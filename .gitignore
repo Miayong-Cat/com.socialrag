@@ -90,3 +90,4 @@ chroma_db/
 # data (원본 PDF·정제 결과는 커밋하지 않음)
 data/raw/
 data/processed/
+data/app.db
