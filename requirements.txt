@@ -7,6 +7,10 @@ fastapi==0.142.2
 uvicorn[standard]==0.54.0
 sqlalchemy==2.1.2
 
+# DB 연결 (PostgreSQL을 Docker로 실행 — docker-compose.yml)
+pg8000==1.31.5          # 파이썬 → PostgreSQL 접속 라이브러리 (순수 파이썬 — 윈도우 앱 제어 정책에 막히지 않음)
+python-dotenv==1.2.4    # .env 파일의 접속 정보를 읽어 환경변수로 올려 줌
+
 # 테스트
 pytest==9.1.1
 httpx2==2.13.1  # TestClient가 사용

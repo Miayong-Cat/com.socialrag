@@ -1,0 +1,41 @@
+# DB 서버 실행 설정 — PostgreSQL(+ pgvector)을 Docker 컨테이너로 띄운다.
+#
+# 사용법 (프로젝트 최상위 폴더에서):
+#   docker compose up -d      DB 켜기   (-d = 백그라운드 실행, 터미널을 닫아도 계속 돌아감)
+#   docker compose ps         상태 보기 (STATUS 에 healthy 가 보이면 접속 가능)
+#   docker compose stop       DB 끄기   (데이터는 남음)
+#   docker compose down -v    DB 삭제   (-v = 저장된 데이터까지 전부 지움. 적재 스크립트로 다시 채울 수 있음)
+#
+# 접속 정보(사용자·비밀번호·DB 이름·포트)는 같은 폴더의 .env 파일에서 읽는다.
+#   ${POSTGRES_USER} → .env 의 POSTGRES_USER 값으로 바뀜. .env 는 .env.example 을 복사해서 만든다.
+
+services:
+  db:                                   # 서비스 이름. 이 파일 안에서 DB 컨테이너를 부르는 이름
+    # pgvector/pgvector:pg17 = PostgreSQL 17 + pgvector 확장이 미리 설치된 공식 이미지
+    #   pgvector = 벡터(문장 의미) 검색 기능. 4단계 RAG에서 지침서 문단 검색에 쓸 예정
+    image: pgvector/pgvector:pg17
+    container_name: welfare-db          # docker ps 에 보이는 컨테이너 이름
+    restart: unless-stopped             # Docker Desktop을 다시 켜면 DB도 자동으로 다시 켜짐 (직접 stop 한 경우 제외)
+
+    environment:                        # 컨테이너가 처음 만들어질 때 이 값으로 사용자·DB를 생성
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    ports:
+      # "내 PC 주소:내 PC 포트:컨테이너 포트"
+      # 127.0.0.1 로 묶어 이 PC 안에서만 접속 가능 (같은 와이파이의 다른 기기에서는 접속 불가)
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+
+    volumes:
+      # DB 데이터를 아래 named volume 에 저장 → 컨테이너를 지웠다 다시 만들어도 데이터 유지
+      - welfare-db-data:/var/lib/postgresql/data
+
+    healthcheck:                        # "접속 받을 준비가 됐는지" 주기적으로 확인
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s                      # 5초마다 확인
+      timeout: 3s                       # 3초 안에 응답 없으면 실패
+      retries: 10                       # 10번 연속 실패하면 unhealthy
+
+volumes:
+  welfare-db-data:                      # 위에서 쓴 데이터 저장소. Docker가 알아서 위치를 관리함
