@@ -22,11 +22,9 @@ SOURCE_PAGE = 14
 
 
 def load_median_incomes(db: Session, criteria: dict) -> None:
-    """1~7인은 표 값, 8인은 '7인 + 1인 증가액'(원문 주석에 8인 금액이 그대로 나옴)."""
+    """지침서 표의 1~7인만 저장. 8인 이상은 판정 엔진이 계산한다(app/eligibility/rules.py)."""
     year = criteria["year"]
-    median = criteria["median_income"]
-    amounts = {int(size): amount for size, amount in median["by_household"].items()}
-    amounts[8] = amounts[7] + median["increment_per_extra_person"]
+    amounts = {int(size): amount for size, amount in criteria["median_income"]["by_household"].items()}
 
     db.execute(delete(MedianIncome).where(MedianIncome.year == year))
     for size, amount in amounts.items():

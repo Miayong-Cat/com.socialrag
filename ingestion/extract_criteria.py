@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pdfplumber
 
+from app.eligibility.rules import percent_of
+
 ROOT = Path(__file__).resolve().parents[1]
 PDF_PATH = ROOT / "data" / "raw" / "2026_국민기초생활보장_사업안내.pdf"
 OUT_PATH = ROOT / "data" / "processed" / "criteria_2026.json"
@@ -60,11 +62,6 @@ def parse_benefit(text: str, name: str) -> dict:
 def parse_livelihood_increment(text: str) -> int:
     """8인 이상 증가액. 원문 주석은 생계급여 금액만 예시로 준다."""
     return to_int(re.search(rf"급여별 선정기준：1인 증가시마다 ({AMOUNT})원", text).group(1))
-
-
-def percent_of(amount: int, percent: int) -> int:
-    """amount × percent% 를 원 단위로 반올림. 원문 표가 이 방식으로 계산돼 있음."""
-    return (amount * percent + 50) // 100
 
 
 def check(criteria: dict) -> None:

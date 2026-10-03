@@ -30,5 +30,5 @@ class MedianIncome(Base):
     __tablename__ = "median_incomes"
 
     year: Mapped[int] = mapped_column(primary_key=True)
-    household_size: Mapped[int] = mapped_column(primary_key=True)  # 1 ~ 8 (9인 이상은 판정 엔진이 계산)
+    household_size: Mapped[int] = mapped_column(primary_key=True)  # 1 ~ 7 (8인 이상은 판정 엔진이 계산)
     amount: Mapped[int]

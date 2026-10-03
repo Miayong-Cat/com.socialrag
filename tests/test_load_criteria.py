@@ -27,11 +27,11 @@ def test_load(db):
     assert programs[0].source_document == "2026 국민기초생활보장 사업안내"
 
 
-def test_8_person_median_matches_pdf(db):
-    """8인 금액은 원문 주석에 10,474,348원으로 나온다."""
+def test_median_incomes(db):
     load(db, CRITERIA)
 
-    assert db.get(MedianIncome, (2026, 8)).amount == 10_474_348
+    assert db.get(MedianIncome, (2026, 7)).amount == 9_515_150
+    assert db.get(MedianIncome, (2026, 8)) is None  # 8인 이상은 저장하지 않고 계산
 
 
 def test_reload_does_not_duplicate(db):
@@ -39,4 +39,4 @@ def test_reload_does_not_duplicate(db):
     load(db, CRITERIA)
 
     assert len(db.scalars(select(WelfareProgram)).all()) == 2
-    assert len(db.scalars(select(MedianIncome)).all()) == 3  # 1·7·8인
+    assert len(db.scalars(select(MedianIncome)).all()) == 2  # 1·7인
