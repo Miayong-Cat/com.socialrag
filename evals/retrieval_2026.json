@@ -1,0 +1,33 @@
+{
+  "description": "검색 평가셋 — 질문마다 답이 들어 있는 지침서 PDF 쪽번호(relevant_pages). 쪽은 본문을 직접 읽어 확인했다.",
+  "year": 2026,
+  "questions": [
+    {"id": 1, "question": "생계급여 받는데 일해서 번 돈은 얼마나 빼주나요?", "relevant_pages": [131]},
+    {"id": 2, "question": "자동차가 있으면 재산으로 어떻게 계산돼요?", "relevant_pages": [178, 179]},
+    {"id": 3, "question": "부양의무자는 누구까지인가요?", "relevant_pages": [222, 225, 226]},
+    {"id": 4, "question": "아이를 낳으면 받을 수 있는 급여가 있나요?", "relevant_pages": [280]},
+    {"id": 5, "question": "수급자가 돌아가시면 장례 비용을 지원받을 수 있나요?", "relevant_pages": [281, 282]},
+    {"id": 6, "question": "급여 결정에 불만이 있으면 어떻게 다툴 수 있나요?", "relevant_pages": [376, 378]},
+    {"id": 7, "question": "기초생활보장 급여 신청은 누가 할 수 있나요?", "relevant_pages": [47]},
+    {"id": 8, "question": "신청할 때 어떤 서류를 내야 하나요?", "relevant_pages": [48]},
+    {"id": 9, "question": "근로능력이 있다고 보는 나이는 몇 살부터 몇 살까지인가요?", "relevant_pages": [122]},
+    {"id": 10, "question": "전세 보증금은 재산으로 어떻게 평가하나요?", "relevant_pages": [164]},
+    {"id": 11, "question": "아들이 군대에 가면 가구원에서 빠지나요?", "relevant_pages": [97, 98]},
+    {"id": 12, "question": "군대에서 제대하면 바로 다시 수급자가 될 수 있나요?", "relevant_pages": [99, 100]},
+    {"id": 13, "question": "급여를 실수로 더 받았으면 돌려줘야 하나요?", "relevant_pages": [324]},
+    {"id": 14, "question": "거짓말로 급여를 받으면 어떻게 되나요?", "relevant_pages": [303]},
+    {"id": 15, "question": "다른 시로 이사하면 수급 관련 업무는 어떻게 처리되나요?", "relevant_pages": [293, 294]},
+    {"id": 16, "question": "통장에 예금이 있으면 얼마까지 재산에서 빼주나요?", "relevant_pages": [174]},
+    {"id": 17, "question": "소득평가액은 어떻게 계산하나요?", "relevant_pages": [125]},
+    {"id": 18, "question": "같이 사는 가족 중 누구까지 한 가구로 보나요?", "relevant_pages": [57, 58]},
+    {"id": 19, "question": "급여가 중지되는 경우는 언제인가요?", "relevant_pages": [257, 258]},
+    {"id": 20, "question": "치매가 있는 수급자의 급여를 다른 사람이 대신 관리할 수 있나요?", "relevant_pages": [295, 296]},
+    {"id": 21, "question": "보장시설 수급자가 근로소득을 저축하면 어떤 혜택이 있나요?", "relevant_pages": [358]},
+    {"id": 22, "question": "보장비용 징수권의 소멸시효는 몇 년인가요?", "relevant_pages": [320]},
+    {"id": 23, "question": "이행기 보전액이 무엇인가요?", "relevant_pages": [279]},
+    {"id": 24, "question": "조건부수급자가 자활사업 조건을 지키지 않으면 어떻게 되나요?", "relevant_pages": [273]},
+    {"id": 25, "question": "급여관리자 지정 제외 대상은 누구인가요?", "relevant_pages": [296]},
+    {"id": 26, "question": "장기금융저축공제 한도는 얼마인가요?", "relevant_pages": [174]},
+    {"id": 27, "question": "해산급여는 신청하고 며칠 안에 지급되나요?", "relevant_pages": [281]}
+  ]
+}

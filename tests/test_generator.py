@@ -16,7 +16,12 @@ from app.models import GuideChunk
 from app.rag.generator import build_documents, generate
 
 CHUNKS = [
-    GuideChunk(page=131, section="Ⅲ. 소득조사", text="생계･주거･교육급여 수급(권)자의 근로･사업소득은 30% 공제 적용"),
+    GuideChunk(
+        page=131,
+        section="Ⅲ. 소득조사",
+        heading="4) 근로를 유인하기 위한 요인",
+        text="생계･주거･교육급여 수급(권)자의 근로･사업소득은 30% 공제 적용",
+    ),
     GuideChunk(page=14, section="Ⅰ. 개요", text="생계급여 선정기준은 기준 중위소득의 32% 이하"),
 ]
 
@@ -43,10 +48,11 @@ def citation(document_index, cited_text):
 
 
 def test_build_documents():
-    """청크 하나 = 문서 하나. 인용 기능이 켜져 있고, 제목에 장 이름·쪽번호가 들어간다."""
+    """청크 하나 = 문서 하나. 인용 기능이 켜져 있고, 제목에 장 이름·항목 경로·쪽번호가 들어간다."""
     docs = build_documents(CHUNKS)
     assert docs[0]["source"]["data"] == CHUNKS[0].text
-    assert docs[0]["title"] == "Ⅲ. 소득조사 p.131"
+    assert docs[0]["title"] == "Ⅲ. 소득조사 > 4) 근로를 유인하기 위한 요인 p.131"
+    assert docs[1]["title"] == "Ⅰ. 개요 p.14"  # 항목 경로가 없으면 장 이름만
     assert all(d["citations"] == {"enabled": True} for d in docs)
 
 

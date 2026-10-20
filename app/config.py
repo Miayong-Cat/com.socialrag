@@ -43,7 +43,8 @@ TEXT_JSONL_PATH = PROCESSED_DIR / f"text_{YEAR}.jsonl"
 # ── RAG (4단계) ───────────────────────────────────────────
 # 임베딩 모델: 글 → 벡터. 로컬에서 돌아가는 무료 한국어 지원 모델 (처음 실행 때 약 2.3GB 내려받음)
 EMBEDDING_MODEL = "BAAI/bge-m3"
-EMBEDDING_DIM = 1024  # BGE-m3 벡터 길이 — guide_chunks 테이블의 벡터 칸 크기
+EMBEDDING_DIM = 1024  # BGE-m3 dense 벡터 길이 — guide_chunks 테이블의 벡터 칸 크기
+SPARSE_DIM = 250_002  # BGE-m3 토큰 종류 수 = sparse 벡터 차원 (= len(모델.tokenizer))
 # 답변 생성 LLM (Anthropic Claude). API 키는 .env 의 ANTHROPIC_API_KEY
 LLM_MODEL = "claude-opus-5-5"
 

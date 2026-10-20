@@ -22,9 +22,9 @@ app/                  API 서버 (FastAPI)
 │   ├── welfare.py    복지제도 CRUD API
 │   └── eligibility.py  판정 API — 가구 정보 → 제도별 충족 여부 + 계산 내역
 ├── rag/              RAG — 지침서 근거 검색 + Claude 설명 (파일별 역할은 app/rag/__init__.py)
-│   ├── chunking.py   쪽별 본문 → 청크 (머리말·쪽번호 제거, 장 이름 헤더)
-│   ├── embedding.py  글 → 벡터 (BGE-m3, 로컬)
-│   ├── retriever.py  질문과 가까운 청크 검색 (pgvector)
+│   ├── chunking.py   쪽별 본문 → 청크 (항목 구조 기반, 장·항목 경로 헤더, 본문/서식/부록 구분)
+│   ├── embedding.py  글 → 벡터 (BGE-m3 dense + sparse, 로컬)
+│   ├── retriever.py  질문과 가까운 청크 검색 (pgvector, 기본: 벡터 + 본문만)
 │   ├── generator.py  청크를 근거로 Claude 답변 + 인용 쪽번호
 │   └── ask.py        터미널 질문 CLI
 └── eligibility/      판정 엔진 (LLM 없이 지침서 산식 그대로, DB 접근 없는 순수 함수)
@@ -43,6 +43,7 @@ tests/                pytest 테스트 — 파일 이름 = test_<대상 파일 �
 ├── conftest.py       공통 준비물 (메모리 DB, API 클라이언트)
 └── guide_2026.py     테스트 기대값으로 쓰는 2026 지침서 숫자
 spike/                0단계 실험 기록 (결론: spike/README.md)
+evals/                검색 품질 평가셋·측정 스크립트·개선 전후 결과 (evals/README.md)
 data/                 원본 PDF·가공 결과 (커밋 안 함, 공공누리 4유형)
 docker-compose.yml    DB 서버 실행 설정 (PostgreSQL + pgvector)
 .env.example          접속 정보 예시 → 복사해서 .env 로 (.env 는 커밋 안 함)
@@ -74,7 +75,7 @@ pip install -r requirements.txt
 python -m ingestion.extract_criteria
 python -m ingestion.extract_text
 python -m ingestion.load_criteria
-python -m ingestion.load_chunks     # 처음엔 BGE-m3 모델 다운로드(약 2.3GB) + CPU 임베딩으로 수 분 이상
+python -m ingestion.load_chunks     # 처음엔 BGE-m3 모델 다운로드(약 2.3GB) + CPU 임베딩 20~30분
 ```
 
 **서버·테스트**
@@ -102,7 +103,7 @@ python -m app.rag.ask "생계급여 근로소득 공제는 어떻게 되나요?"
 python -m app.rag.ask "…" --search-only    # Claude 없이 검색 결과만 (API 키 불필요)
 ```
 
-질문을 임베딩해 pgvector로 가까운 청크 5개를 찾고, Claude(`claude-opus-5-5`)가 그 청크만 근거로 답한다.
+질문을 임베딩해 pgvector로 지침서 본문에서 가까운 청크 5개를 찾고, Claude(`claude-opus-5-5`)가 그 청크만 근거로 답한다.
 Claude API의 인용(citations) 기능으로 답변 문장마다 근거 쪽번호와 원문을 붙인다. API 키는 `.env`의 `ANTHROPIC_API_KEY`.
 
 ## DB 테이블
@@ -113,7 +114,7 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 |---|---|
 | `welfare_programs` | 복지제도 (이름, 중위소득 대비 비율, 출처 쪽, 기준 연도 …) |
 | `median_incomes` | 연도·가구원 수별 기준 중위소득 (지침서 표의 1~7인) |
-| `guide_chunks` | 지침서 본문 청크 + BGE-m3 임베딩(1024차원, pgvector) |
+| `guide_chunks` | 지침서 청크 + 항목 경로·구분(본문/서식/부록) + BGE-m3 dense(1024차원)·sparse 임베딩 (pgvector) |
 
 선정기준 금액은 저장하지 않고 판정 엔진(`app/eligibility/threshold.py`)이 계산한다.
 
@@ -140,3 +141,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 2 | 데이터 수집·정형화 | 🔶 기초생활보장 4종 적재 완료, 대상 제도 추가 예정 |
 | 3 | 판정 엔진 | ✅ 선정기준·소득인정액 계산 + 판정 API (`POST /api/eligibility`) |
 | 4 | 기본 RAG 파이프라인 | ✅ 글자 수 청킹 + BGE-m3 + pgvector + Claude 인용 답변 (CLI) |
+| 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |

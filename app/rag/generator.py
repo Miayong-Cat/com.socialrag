@@ -50,7 +50,8 @@ def build_documents(chunks: list[GuideChunk]) -> list[dict]:
         {
             "type": "document",
             "source": {"type": "text", "media_type": "text/plain", "data": chunk.text},
-            "title": f"{chunk.section} p.{chunk.page}",
+            # 제목 = 장 이름 > 항목 경로 + 쪽. Claude 가 문단의 위치(어느 제도·절차인지)를 알게 한다.
+            "title": " > ".join(x for x in (chunk.section, chunk.heading) if x) + f" p.{chunk.page}",
             "citations": {"enabled": True},
         }
         for chunk in chunks
