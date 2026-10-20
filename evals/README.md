@@ -72,3 +72,44 @@ python -m evals.eval_retrieval                             # 기본 설정(vecto
 python -m evals.eval_retrieval --method hybrid --save 4_xxx   # 결과를 results/4_xxx.json 에 저장
 python -m evals.eval_retrieval --all-parts                 # 서식·부록·목차까지 검색
 ```
+
+---
+
+# 챗봇 평가셋 50문항 (8단계)
+
+`testset_2026.json` — 질문 + 정답 + 근거 쪽. 채점: `eval_testset.py`
+
+| 유형 | 문항 | 정답 | 무엇을 보나 |
+|---|---|---|---|
+| eligibility | 25 | 제도별 소득인정액·충족 여부 (손계산, 계산식은 `calc`) | 판정이 맞는가 |
+| ask | 5 | 되물어야 할 조건 목록 | 부족한 조건을 정확히 묻는가 |
+| crisis | 5 | 위기 신호 종류 (1문항은 `null` = 오탐 검사) | 위기를 놓치지 않는가 |
+| info | 15 | 참고 답변(`reference`) + 정답 쪽 | 근거를 찾아 답하는가 (RAGAS 입력) |
+
+- 판정 정답은 **엔진 출력을 복사하지 않고** 지침서 계산식으로 손계산했다 (p.191 예시1, 경계값 820,556원 = 충족 / 820,557원 = 미충족, 주거용재산 한도 초과, 기본재산액·부채 차감 순서, 공제 유형별, 의료급여의 일반 근로소득공제 없음, 자동차 100% 등)
+- 위기 감지는 50문항 전부에 돌린다 — 위기 문항이 아닌 45문항에서 잡히면 오탐
+
+## 결과 — engine 모드 (Claude 없이, 무료)
+
+| 항목 | 결과 |
+|---|---|
+| 판정 (문항 단위 — 4개 제도 모두 맞아야 정답) | **25 / 25** |
+| 판정 (제도 단위 충족/미충족) | **100 / 100** |
+| 되물을 조건 | 5 / 5 |
+| 위기 감지 (위기 문항) | 4 / 5 → 규칙 보완 후 **5 / 5** |
+| 위기 감지 (전 문항, 오탐 포함) | 50 / 50 |
+| 설명 질문 — 검색 Hit@5 | 14 / 15 (Q40 = 위 "남은 문제"의 Q1, 쿼리 재작성 필요) |
+
+- **평가셋이 찾은 버그**: "당장 내일 먹을 쌀도 없어요"를 긴급 생계 신호로 못 잡았다 (`먹을 게/것이/거 없` 만 있었음) → `먹을 쌀도 없`, `먹을 것도 없`, `쌀도 없` 까지 잡도록 규칙을 넓혔다
+- engine 모드는 Claude 를 빼고 **엔진·규칙·검색만** 본다. "Claude 가 질문에서 조건을 제대로 뽑는가"는 chat 모드에서 잰다
+
+## 결과 — chat 모드 (Claude 포함) — API 결제 후 측정 예정
+
+질문을 챗봇에 그대로 보내 알아듣기 → 판정까지 끝까지 맞는지, 설명 질문은 정답 쪽을 인용하는지 본다.
+info 문항의 답변·검색 문맥은 `results/testset_chat.json` 에 저장돼 RAGAS 채점 입력이 된다.
+
+```bash
+python -m evals.eval_testset                 # engine 모드 → results/testset_engine.json
+python -m evals.eval_testset --chat          # chat 모드 (유료) → results/testset_chat.json
+python -m evals.eval_testset --chat --ids 2,27,40   # 일부만 (저장 안 함)
+```

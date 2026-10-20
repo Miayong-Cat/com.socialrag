@@ -56,7 +56,7 @@ tests/                pytest 테스트 — 파일 이름 = test_<대상 파일 �
 ├── conftest.py       공통 준비물 (메모리 DB, API 클라이언트)
 └── guide_2026.py     테스트 기대값으로 쓰는 2026 지침서 숫자
 spike/                0단계 실험 기록 (결론: spike/README.md)
-evals/                검색 품질 평가셋·측정 스크립트·개선 전후 결과 (evals/README.md)
+evals/                검색 평가셋(27)·챗봇 평가셋(50)·채점 스크립트·결과 (evals/README.md)
 data/                 원본 PDF·가공 결과 (커밋 안 함, 공공누리 4유형)
 docker-compose.yml    DB 서버 실행 설정 (PostgreSQL + pgvector)
 .env.example          접속 정보 예시 → 복사해서 .env 로 (.env 는 커밋 안 함)
@@ -203,3 +203,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |
 | 6 | LangGraph 대화형 챗봇 | ✅ 조건 되묻기 루프 + 판정 엔진 결합 + 멀티턴 (CLI, `POST /api/chat`) — 실제 Claude 호출은 API 키 발급 후 확인 필요 |
 | 7 | 도메인 특화 기능 | ✅ 위기 신호 감지·분기, 계산 근거·출처 표시, 무인용 경고, 면책 안내, `ai_search_logs` 기록 |
+| 8 | 평가 및 UI | 🔄 평가셋 50문항 + engine 모드 채점 (판정 100/100, 위기 50/50, 검색 Hit@5 14/15) — chat 모드·RAGAS·로그 리포트·UI 진행 예정 |

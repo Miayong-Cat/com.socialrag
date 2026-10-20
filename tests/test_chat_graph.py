@@ -172,6 +172,8 @@ def test_detect_crisis_levels():
     assert detect("남편이 때려요").category == "abuse"
     assert detect("가정폭력 피해자도 특례가 있나요?").level == "notice"   # 제도 질문도 안내 + 답변 계속
     assert detect("며칠째 굶고 있어요").category == "livelihood"
+    assert detect("당장 내일 먹을 쌀도 없어요").category == "livelihood"  # 평가셋 Q33 에서 놓쳤던 표현
+    assert detect("먹을 것도 없어요").category == "livelihood"
     assert detect("생계급여 선정기준이 뭔가요?") is None
 
 
