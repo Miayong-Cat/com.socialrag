@@ -20,7 +20,16 @@ app/                  API 서버 (FastAPI)
 ├── schemas.py        요청/응답 형식 + 입력 검증
 ├── routes/
 │   ├── welfare.py    복지제도 CRUD API
-│   └── eligibility.py  판정 API — 가구 정보 → 제도별 충족 여부 + 계산 내역
+│   ├── eligibility.py  판정 API — 가구 정보 → 제도별 충족 여부 + 계산 내역
+│   └── chat.py       챗봇 API — 메시지 → 답 (조건이 부족하면 되묻기)
+├── services/
+│   └── eligibility.py  판정 서비스 — DB 기준값 조회 + 판정 엔진 (판정 API·챗봇 공용)
+├── chat/             대화형 챗봇 (LangGraph) — 파일별 역할은 app/chat/__init__.py
+│   ├── state.py      대화 상태, 가구 조건 수집 규칙
+│   ├── understand.py 사용자 말 → 의도·조건·검색어 (Claude 구조화 출력)
+│   ├── graph.py      그래프 — 이해 → 조건 확인 → (되묻기 루프) → 판정 → 검색 → 답변
+│   ├── session.py    메시지 하나 처리 (되묻는 중이면 답으로 이어서 실행)
+│   └── cli.py        터미널 대화
 ├── rag/              RAG — 지침서 근거 검색 + Claude 설명 (파일별 역할은 app/rag/__init__.py)
 │   ├── chunking.py   쪽별 본문 → 청크 (항목 구조 기반, 장·항목 경로 헤더, 본문/서식/부록 구분)
 │   ├── embedding.py  글 → 벡터 (BGE-m3 dense + sparse, 로컬)
@@ -96,6 +105,42 @@ pytest                            # 메모리 DB를 쓰므로 Docker 없이도 �
 응답의 `results`에 제도마다 소득평가액·재산의 소득환산액·소득인정액·선정기준액·충족 여부·근거 쪽번호가 담긴다.
 입력 칸 설명은 `/docs` 화면 또는 `app/schemas.py`의 `EligibilityRequest` 참고.
 
+## 대화형 챗봇
+
+```bash
+python -m app.chat.cli            # 터미널 대화 (DB + .env 의 ANTHROPIC_API_KEY 필요)
+```
+
+```
+나> 혼자 사는데 생계급여 받을 수 있나요?
+챗봇> 판정하려면 몇 가지가 더 필요해요.
+      1. 어디에 사시나요? …  2. 가구 전체가 일해서 버는 돈은 한 달에 얼마인가요? …  3. 재산을 알려 주세요 …
+나> 서울이고 월 110만원 벌어요. 재산은 없어요
+챗봇> | 급여 | 결과 | 소득인정액 | 선정기준액 |   ← 판정 엔진이 계산한 표 (코드가 만듦)
+      | 생계급여 | ✅ 충족 | 770,000원 | 820,556원 | …
+      (이어서 Claude 가 지침서 근거로 기준·다음 할 일을 설명, 근거 쪽 표시)
+```
+
+API는 `POST /api/chat` — 첫 요청은 `{"message": "…"}`, 이후엔 응답의 `thread_id`를 같이 보낸다.
+응답의 `waiting: true`는 조건을 되묻는 중이라는 뜻이고, 다음 메시지가 그 답이 된다.
+
+LangGraph 그래프(`app/chat/graph.py`):
+
+```
+START → understand ─(제도 설명 질문)──────────────────────────→ retrieve → generate → END
+            │ (받을 수 있나요?)                                     ▲
+            ▼                                                       │
+     condition_check ─(조건 다 모임)→ eligibility_check ─────────────┘
+            │ (부족)
+            ▼
+      ask_condition ── interrupt: 답을 기다림 ──→ understand 로 되돌아감 (되묻기 루프)
+```
+
+- **understand**: Claude 구조화 출력으로 의도(판정/설명)·가구 조건·검색어를 뽑는다. 검색어는 일상어를 지침서 용어로 바꿔 쓴다 ("일해서 번 돈" → "근로소득")
+- **판정은 LLM이 아니라 판정 엔진**이 하고, 판정표도 코드가 만든다. Claude는 이유와 다음 할 일을 설명만 한다
+- 대화 상태(모은 조건)는 `thread_id`별로 서버 메모리(InMemorySaver)에 저장 — 서버를 다시 켜면 사라진다
+- 근로소득은 가구 합계 하나로 받아 소득자 1명으로 계산한다 (소득자마다 공제 유형이 다르면 오차 가능)
+
 ## RAG 질문 (CLI)
 
 ```bash
@@ -142,3 +187,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 3 | 판정 엔진 | ✅ 선정기준·소득인정액 계산 + 판정 API (`POST /api/eligibility`) |
 | 4 | 기본 RAG 파이프라인 | ✅ 글자 수 청킹 + BGE-m3 + pgvector + Claude 인용 답변 (CLI) |
 | 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |
+| 6 | LangGraph 대화형 챗봇 | ✅ 조건 되묻기 루프 + 판정 엔진 결합 + 멀티턴 (CLI, `POST /api/chat`) — 실제 Claude 호출은 API 키 발급 후 확인 필요 |

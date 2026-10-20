@@ -18,6 +18,9 @@ sentence-transformers==6.1.0   # 임베딩 모델(BGE-m3) 실행
 pgvector==0.5.1                # SQLAlchemy 에서 pgvector 벡터 칸 사용
 anthropic==1.15.0              # Claude API (답변 생성)
 
+# 6단계 대화형 챗봇
+langgraph==1.2.16              # 상태 그래프 — 조건 되묻기 루프, 대화별 상태 저장
+
 # 테스트
 pytest==9.1.1
 httpx2==2.13.1  # TestClient가 사용

@@ -23,6 +23,7 @@ SYSTEM_PROMPT = """\
 
 - 함께 주어진 지침서 문단에 있는 내용만으로 답하세요. 문단에 없는 내용은 추측하지 말고 "제공된 지침서 문단에서는 찾을 수 없습니다"라고 말하세요.
 - 특정 가구의 수급 가능 여부나 금액은 직접 계산하지 마세요. 별도의 판정 엔진이 계산합니다. 기준과 절차를 설명하는 데 집중하세요.
+- [판정 엔진 결과]가 함께 주어지면 그 결과가 정답입니다. 다시 계산하거나 바꾸지 말고, 사용자에게 이미 표로 보여 주었으니 숫자를 되풀이하기보다 왜 그런 결과인지(어떤 기준이 적용됐는지)와 다음에 할 일(신청 방법, 추가로 확인할 점)을 지침서 문단을 근거로 설명하세요.
 - 한국어로, 쉬운 말로, 핵심부터 간결하게 답하세요.
 """
 
@@ -83,8 +84,15 @@ def parse_response(response, chunks: list[GuideChunk]) -> Answer:
     return Answer(text="".join(parts).strip(), sources=sources)
 
 
-def generate(question: str, chunks: list[GuideChunk], client: anthropic.Anthropic | None = None) -> Answer:
+def generate(
+    question: str,
+    chunks: list[GuideChunk],
+    client: anthropic.Anthropic | None = None,
+    facts: str | None = None,
+) -> Answer:
     """질문 + 근거 청크 → Claude 답변.
+
+    facts: 판정 엔진 결과 등 "이미 확정된 사실" 글. 주어지면 질문 앞에 붙여 Claude 가 설명의 출발점으로 쓴다.
 
     client 를 넘기지 않으면 새로 만든다 (테스트에서는 가짜 client 를 넘김).
     fallbacks="default": Claude 의 안전 분류기가 요청을 거절하면 서버가 다른 모델로 자동 재시도한다.
@@ -101,7 +109,11 @@ def generate(question: str, chunks: list[GuideChunk], client: anthropic.Anthropi
             {
                 "role": "user",
                 # 문서 블록을 먼저, 질문을 마지막에 둔다.
-                "content": [*build_documents(chunks), {"type": "text", "text": question}],
+                "content": [
+                    *build_documents(chunks),
+                    *([{"type": "text", "text": f"[판정 엔진 결과]\n{facts}"}] if facts else []),
+                    {"type": "text", "text": question},
+                ],
             }
         ],
     )

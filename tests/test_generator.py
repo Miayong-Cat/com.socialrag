@@ -85,3 +85,14 @@ def test_refusal():
     answer = generate("…", CHUNKS, client=FakeClient(NS(stop_reason="refusal", content=[])))
     assert answer.text == "이 질문에는 답변할 수 없습니다."
     assert answer.sources == []
+
+
+def test_facts_are_given_before_question():
+    """판정 엔진 결과(facts)를 주면 문서들 뒤, 질문 앞에 [판정 엔진 결과] 블록으로 들어간다."""
+    client = FakeClient(NS(stop_reason="end_turn", content=[text_block("설명")]))
+    generate("받을 수 있나요?", CHUNKS, client=client, facts="| 생계급여 | ✅ 충족 |")
+
+    content = client.request["messages"][0]["content"]
+    assert [b["type"] for b in content] == ["document", "document", "text", "text"]
+    assert content[2]["text"] == "[판정 엔진 결과]\n| 생계급여 | ✅ 충족 |"
+    assert content[3]["text"] == "받을 수 있나요?"

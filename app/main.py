@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager  # "시작할 때 / 끝날 때" 실�
 from fastapi import FastAPI
 
 from app.database import create_tables
-from app.routes import eligibility, welfare  # 판정 API, 복지제도 CRUD API (app/routes/)
+from app.routes import chat, eligibility, welfare  # 챗봇 API, 판정 API, 복지제도 CRUD API (app/routes/)
 
 
 @asynccontextmanager
@@ -43,3 +43,4 @@ app = FastAPI(title="복지제도 판정 RAG 챗봇 API", lifespan=lifespan)
 # 라우터 등록: 각 파일에 정의한 /api/... 경로들이 서버에 연결된다.
 app.include_router(welfare.router)
 app.include_router(eligibility.router)  # /api/eligibility (app/routes/eligibility.py)
+app.include_router(chat.router)  # /api/chat (app/routes/chat.py)
