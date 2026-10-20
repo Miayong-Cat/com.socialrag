@@ -1,4 +1,4 @@
-"""[적재 3/3] criteria JSON → DB (welfare_programs, median_incomes 테이블).
+"""[적재 3/4] criteria JSON → DB (welfare_programs, median_incomes 테이블).
 
 extract_criteria.py 가 만든 JSON 파일을 읽어 DB에 넣는다.
 같은 연도로 여러 번 실행해도 중복이 생기지 않는다(있으면 덮어씀).
@@ -18,7 +18,7 @@ from sqlalchemy import delete, select  # DELETE / SELECT 쿼리를 파이썬 코
 from sqlalchemy.orm import Session
 
 from app.config import CRITERIA_JSON_PATH
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal, create_tables
 from app.models import MedianIncome, WelfareProgram
 
 # 이번에 넣는 제도들의 공통 정보
@@ -86,7 +86,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")  # 윈도우 터미널 한글 깨짐 방지
     criteria = json.loads(CRITERIA_JSON_PATH.read_text(encoding="utf-8"))
 
-    Base.metadata.create_all(engine)  # 서버를 한 번도 안 켰어도 테이블이 있도록 (없는 것만 만듦)
+    create_tables()  # 서버를 한 번도 안 켰어도 테이블이 있도록 (없는 것만 만듦)
     with SessionLocal() as db:  # 블록이 끝나면 세션이 자동으로 닫힘
         load(db, criteria)
         # 확인용으로 적재 결과를 다시 읽어 온다.

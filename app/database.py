@@ -9,7 +9,7 @@ DB 주소는 app/config.py 의 DATABASE_URL 에서 가져온다 (Docker로 띄�
 DB 서버가 꺼져 있어도 import 는 된다 — 실제 접속은 처음 쿼리를 보낼 때 일어난다.
 """
 
-from sqlalchemy import create_engine  # DB 연결 통로(engine)를 만드는 함수
+from sqlalchemy import create_engine, text  # DB 연결 통로(engine)를 만드는 함수, SQL 문자열 실행용
 from sqlalchemy.orm import DeclarativeBase, sessionmaker  # 테이블 부모 클래스, 세션 공장
 
 from app.config import DATABASE_URL
@@ -28,6 +28,19 @@ class Base(DeclarativeBase):
     이 클래스를 상속한 클래스(예: WelfareProgram)는 SQLAlchemy가 테이블로 인식하고,
     Base.metadata.create_all(engine) 을 호출하면 해당 테이블이 DB에 만들어진다.
     """
+
+
+def create_tables() -> None:
+    """없는 테이블을 만든다. (서버 시작·적재 스크립트에서 호출)
+
+    guide_chunks 테이블의 벡터 칸은 pgvector 확장이 있어야 만들 수 있으므로 확장을 먼저 켠다.
+    CREATE EXTENSION IF NOT EXISTS → 이미 켜져 있으면 아무 일도 안 함.
+    """
+    import app.models  # noqa: F401 — 모든 테이블 클래스를 Base 에 등록 (빠지면 create_all 이 못 만듦)
+
+    with engine.begin() as conn:  # begin() → 블록이 끝나면 자동 commit
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    Base.metadata.create_all(engine)
 
 
 def get_db():

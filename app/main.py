@@ -20,8 +20,7 @@ from contextlib import asynccontextmanager  # "시작할 때 / 끝날 때" 실�
 
 from fastapi import FastAPI
 
-import app.models  # noqa: F401 — 쓰지 않아도 import 해야 모든 테이블이 Base 에 등록돼 create_all 대상이 됨
-from app.database import Base, engine
+from app.database import create_tables
 from app.routes import eligibility, welfare  # 판정 API, 복지제도 CRUD API (app/routes/)
 
 
@@ -33,7 +32,7 @@ async def lifespan(app: FastAPI):
     create_all 은 "없는 테이블만" 만들고, 이미 있는 테이블과 데이터는 건드리지 않는다.
     (테이블 구조를 바꾸는 마이그레이션 도구는 아직 쓰지 않는 단계)
     """
-    Base.metadata.create_all(engine)
+    create_tables()  # pgvector 확장 켜기 + 없는 테이블 만들기 (app/database.py)
     yield
 
 

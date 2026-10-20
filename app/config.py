@@ -40,6 +40,13 @@ CRITERIA_JSON_PATH = PROCESSED_DIR / f"criteria_{YEAR}.json"
 # ingestion/extract_text.py 가 만드는 파일 (PDF 전체 본문, 4단계 RAG의 재료)
 TEXT_JSONL_PATH = PROCESSED_DIR / f"text_{YEAR}.jsonl"
 
+# ── RAG (4단계) ───────────────────────────────────────────
+# 임베딩 모델: 글 → 벡터. 로컬에서 돌아가는 무료 한국어 지원 모델 (처음 실행 때 약 2.3GB 내려받음)
+EMBEDDING_MODEL = "BAAI/bge-m3"
+EMBEDDING_DIM = 1024  # BGE-m3 벡터 길이 — guide_chunks 테이블의 벡터 칸 크기
+# 답변 생성 LLM (Anthropic Claude). API 키는 .env 의 ANTHROPIC_API_KEY
+LLM_MODEL = "claude-opus-5-5"
+
 # ── DB 주소 ───────────────────────────────────────────────
 # DB는 Docker로 띄운 PostgreSQL 서버다 (docker-compose.yml).
 # 접속 정보(비밀번호 등)는 코드에 적지 않고 프로젝트 최상위의 .env 파일에서 읽는다.
