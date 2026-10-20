@@ -21,6 +21,10 @@ anthropic==1.15.0              # Claude API (답변 생성)
 # 6단계 대화형 챗봇
 langgraph==1.2.16              # 상태 그래프 — 조건 되묻기 루프, 대화별 상태 저장
 
+# 8단계 웹 화면
+streamlit==1.66.0              # 화면 (상담 챗봇·판정 계산기·지침서 검색)
+httpx==0.28.1                  # 화면 → API 서버 호출
+
 # 테스트
 pytest==9.1.1
 httpx2==2.13.1  # TestClient가 사용

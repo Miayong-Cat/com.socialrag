@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager  # "시작할 때 / 끝날 때" 실�
 from fastapi import FastAPI
 
 from app.database import create_tables
-from app.routes import chat, eligibility, welfare  # 챗봇 API, 판정 API, 복지제도 CRUD API (app/routes/)
+from app.routes import chat, eligibility, search, welfare  # 챗봇·판정·지침서 검색·복지제도 CRUD API (app/routes/)
 
 
 @asynccontextmanager
@@ -44,3 +44,4 @@ app = FastAPI(title="복지제도 판정 RAG 챗봇 API", lifespan=lifespan)
 app.include_router(welfare.router)
 app.include_router(eligibility.router)  # /api/eligibility (app/routes/eligibility.py)
 app.include_router(chat.router)  # /api/chat (app/routes/chat.py)
+app.include_router(search.router)  # /api/search (app/routes/search.py)

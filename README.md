@@ -22,7 +22,8 @@ app/                  API 서버 (FastAPI)
 ├── routes/
 │   ├── welfare.py    복지제도 CRUD API
 │   ├── eligibility.py  판정 API — 가구 정보 → 제도별 충족 여부 + 계산 내역
-│   └── chat.py       챗봇 API — 메시지 → 답 (조건이 부족하면 되묻기)
+│   ├── chat.py       챗봇 API — 메시지 → 답 (조건이 부족하면 되묻기)
+│   └── search.py     지침서 검색 API — 질문 → 관련 청크 (Claude 호출 없음)
 ├── services/
 │   ├── eligibility.py  판정 서비스 — DB 기준값 조회 + 판정 엔진 (판정 API·챗봇 공용)
 │   └── search_log.py   ai_search_logs 기록 (실패해도 대화는 계속)
@@ -55,6 +56,9 @@ ingestion/            PDF → 가공 데이터 → DB (서버와 따로 실행)
 tests/                pytest 테스트 — 파일 이름 = test_<대상 파일 이름>
 ├── conftest.py       공통 준비물 (메모리 DB, API 클라이언트)
 └── guide_2026.py     테스트 기대값으로 쓰는 2026 지침서 숫자
+frontend/             웹 화면 (Streamlit) — API 로만 서버를 부름
+├── streamlit_app.py  상담 챗봇 · 판정 계산기 · 지침서 검색 탭
+└── api_client.py     API 호출 + 에러를 화면용 문장으로
 spike/                0단계 실험 기록 (결론: spike/README.md)
 evals/                검색 평가셋(27)·챗봇 평가셋(50)·채점 스크립트·결과 (evals/README.md)
 data/                 원본 PDF·가공 결과 (커밋 안 함, 공공누리 4유형)
@@ -95,8 +99,11 @@ python -m ingestion.load_chunks     # 처음엔 BGE-m3 모델 다운로드(약 2
 
 ```bash
 uvicorn app.main:app --reload     # → http://127.0.0.1:8000/docs  (DB가 켜져 있어야 함)
+streamlit run frontend/streamlit_app.py   # 웹 화면 → http://localhost:8501  (API 서버를 먼저 켬)
 pytest                            # 메모리 DB를 쓰므로 Docker 없이도 실행됨
 ```
+
+**웹 화면 탭** — 상담 챗봇(Claude 필요) · 판정 계산기(판정 API, 만원 단위 입력, 전·월세 보증금 95% 자동 적용) · 지침서 검색(`GET /api/search`). API 서버 주소는 환경변수 `API_URL` (기본 `http://127.0.0.1:8000`)
 
 ## 판정 API
 
@@ -203,4 +210,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |
 | 6 | LangGraph 대화형 챗봇 | ✅ 조건 되묻기 루프 + 판정 엔진 결합 + 멀티턴 (CLI, `POST /api/chat`) — 실제 Claude 호출은 API 키 발급 후 확인 필요 |
 | 7 | 도메인 특화 기능 | ✅ 위기 신호 감지·분기, 계산 근거·출처 표시, 무인용 경고, 면책 안내, `ai_search_logs` 기록 |
-| 8 | 평가 및 UI | 🔄 평가셋 50문항 + engine 모드 채점 (판정 100/100, 위기 50/50, 검색 Hit@5 14/15) + `ai_search_logs` 집계 리포트 — chat 모드·RAGAS·UI 진행 예정 |
+| 8 | 평가 및 UI | 🔄 평가셋 50문항 + engine 모드 채점 (판정 100/100, 위기 50/50, 검색 Hit@5 14/15) + `ai_search_logs` 집계 리포트 + Streamlit UI(챗봇·판정 계산기·지침서 검색) — chat 모드·RAGAS·스트리밍은 API 결제 후 |
