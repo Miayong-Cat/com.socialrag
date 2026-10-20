@@ -113,3 +113,30 @@ python -m evals.eval_testset                 # engine 모드 → results/testset
 python -m evals.eval_testset --chat          # chat 모드 (유료) → results/testset_chat.json
 python -m evals.eval_testset --chat --ids 2,27,40   # 일부만 (저장 안 함)
 ```
+
+---
+
+# 로그 리포트 — `ai_search_logs` 집계 (8단계)
+
+챗봇 턴마다 쌓이는 로그(7단계)를 집계한다: `log_report.py`
+
+| 섹션 | 내용 |
+|---|---|
+| 응답 시간 | 전체 / 턴 종류별(되묻기 · 판정 + 답변 · 설명 답변 · 위기 중단) 평균 · 중간값 · p95 · 최대 |
+| 판정 성공률 | 판정 질문으로 시작한 시도 중 판정까지 간 비율, 되묻기 없이 첫 턴에 판정한 비율, 평균 되묻기 횟수 |
+| 되묻기 | 되묻기 턴 수와 부족했던 조건 수 분포 |
+| 판정 결과 | 제도별 충족 비율 |
+| 기타 | 위기 신호 종류별 건수, 답변 턴 평균 검색 청크 수 |
+
+- **판정 시도**: 판정 의도 턴에서 시작해, 판정이 나오면 성공. 판정 없이 다른 질문으로 넘어가거나 대화가 끝나면 실패(되묻기 중 이탈)
+- 턴 종류를 나눈 이유: 되묻기는 Claude 1회, 판정 + 답변은 Claude 2회 + 검색이라 섞어서 평균 내면 의미가 없다
+- 평가 실행(`thread_id` 가 `eval-` 로 시작)은 기본으로 빼고, `--eval` 로 따로 본다
+- 시각은 DB 기준 UTC
+
+```bash
+python -m evals.log_report                   # 사용자 대화
+python -m evals.log_report --eval            # 평가 실행(eval_testset --chat)만
+python -m evals.log_report --days 7 --save weekly   # 최근 7일 → results/log_report_weekly.md
+```
+
+실제 수치는 결제 후 `eval_testset --chat` 을 돌리면 `--eval` 리포트로 처음 나온다.
