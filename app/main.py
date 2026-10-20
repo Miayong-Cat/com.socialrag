@@ -22,7 +22,7 @@ from fastapi import FastAPI
 
 import app.models  # noqa: F401 — 쓰지 않아도 import 해야 모든 테이블이 Base 에 등록돼 create_all 대상이 됨
 from app.database import Base, engine
-from app.routes import welfare  # 복지제도 CRUD API (app/routes/welfare.py)
+from app.routes import eligibility, welfare  # 판정 API, 복지제도 CRUD API (app/routes/)
 
 
 @asynccontextmanager
@@ -41,5 +41,6 @@ async def lifespan(app: FastAPI):
 #   title → Swagger(/docs) 화면 제목
 app = FastAPI(title="복지제도 판정 RAG 챗봇 API", lifespan=lifespan)
 
-# 라우터 등록: welfare.py 에 정의한 /api/welfare/... 경로들이 서버에 연결된다.
+# 라우터 등록: 각 파일에 정의한 /api/... 경로들이 서버에 연결된다.
 app.include_router(welfare.router)
+app.include_router(eligibility.router)  # /api/eligibility (app/routes/eligibility.py)
