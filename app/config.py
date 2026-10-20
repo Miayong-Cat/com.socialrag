@@ -32,6 +32,7 @@ PROCESSED_DIR = DATA_DIR / "processed"  # 적재 스크립트가 PDF에서 뽑�
 # ── 파일 경로 ─────────────────────────────────────────────
 # 원본: 보건복지부 「국민기초생활보장 사업안내」 PDF
 GUIDE_PDF_PATH = RAW_DIR / f"{YEAR}_국민기초생활보장_사업안내.pdf"
+GUIDE_TITLE = f"{YEAR} 국민기초생활보장 사업안내"  # 답변 출처에 표시하는 문서 이름
 
 # ingestion/extract_criteria.py 가 만들고, ingestion/load_criteria.py 가 읽는 파일
 # (기준 중위소득 + 급여별 선정기준표)

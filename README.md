@@ -16,16 +16,20 @@ app/                  API 서버 (FastAPI)
 ├── models/           DB 테이블 정의 — 테이블 하나 = 파일 하나
 │   ├── welfare_program.py  welfare_programs 테이블
 │   ├── median_income.py    median_incomes 테이블
-│   └── guide_chunk.py      guide_chunks 테이블 (지침서 청크 + 임베딩)
+│   ├── guide_chunk.py      guide_chunks 테이블 (지침서 청크 + 임베딩)
+│   └── ai_search_log.py    ai_search_logs 테이블 (챗봇 턴 기록)
 ├── schemas.py        요청/응답 형식 + 입력 검증
 ├── routes/
 │   ├── welfare.py    복지제도 CRUD API
 │   ├── eligibility.py  판정 API — 가구 정보 → 제도별 충족 여부 + 계산 내역
 │   └── chat.py       챗봇 API — 메시지 → 답 (조건이 부족하면 되묻기)
 ├── services/
-│   └── eligibility.py  판정 서비스 — DB 기준값 조회 + 판정 엔진 (판정 API·챗봇 공용)
+│   ├── eligibility.py  판정 서비스 — DB 기준값 조회 + 판정 엔진 (판정 API·챗봇 공용)
+│   └── search_log.py   ai_search_logs 기록 (실패해도 대화는 계속)
 ├── chat/             대화형 챗봇 (LangGraph) — 파일별 역할은 app/chat/__init__.py
 │   ├── state.py      대화 상태, 가구 조건 수집 규칙
+│   ├── crisis.py     위기 신호 감지 (규칙) — 자살·학대·긴급 생계
+│   ├── format.py     판정표·계산 근거·출처·면책 안내 (코드가 만듦)
 │   ├── understand.py 사용자 말 → 의도·조건·검색어 (Claude 구조화 출력)
 │   ├── graph.py      그래프 — 이해 → 조건 확인 → (되묻기 루프) → 판정 → 검색 → 답변
 │   ├── session.py    메시지 하나 처리 (되묻는 중이면 답으로 이어서 실행)
@@ -127,14 +131,23 @@ API는 `POST /api/chat` — 첫 요청은 `{"message": "…"}`, 이후엔 응답
 LangGraph 그래프(`app/chat/graph.py`):
 
 ```
-START → understand ─(제도 설명 질문)──────────────────────────→ retrieve → generate → END
+START → crisis_check ─(자살·자해 신호)→ crisis_handler → END   상담 전화 안내만
+            │ (그 밖 — 학대·긴급 생계는 안내를 앞에 붙이고 계속)
+            ▼
+        understand ─(제도 설명 질문)──────────────────────────→ retrieve → generate → END
             │ (받을 수 있나요?)                                     ▲
             ▼                                                       │
      condition_check ─(조건 다 모임)→ eligibility_check ─────────────┘
             │ (부족)
             ▼
-      ask_condition ── interrupt: 답을 기다림 ──→ understand 로 되돌아감 (되묻기 루프)
+      ask_condition ── interrupt: 답을 기다림 ──→ crisis_check 로 되돌아감 (되묻기 루프)
 ```
+
+- **위기 신호 감지**: 모든 사용자 메시지(되묻기 답 포함)를 규칙으로 검사한다. 생명·안전 판단이라 LLM 대신 항상 같게 반응하는 규칙을 썼다
+  - 자살·자해 → 일반 흐름 중단, 109·1577-0199·119 안내 / 학대·폭력 → 112·1366 등 안내 + 답변 계속 / 긴급 생계 → 긴급복지지원(129) 안내 + 답변 계속
+- **답변 형식** (`app/chat/format.py`): 판정표 → 계산 근거(계산식·근거 쪽) → Claude 설명 → 출처(문서명·쪽·인용문) → 면책 안내. 숫자·출처는 전부 코드가 만든다
+- **모르면 모른다**: Claude 설명에 지침서 인용이 하나도 없으면 "근거를 찾지 못했을 수 있다"는 경고를 붙인다
+- **로그**: 턴마다 `ai_search_logs`에 질문·의도·위기 여부·검색 문서 수·응답 시간·판정 요약·되물은 조건 수를 기록
 
 - **understand**: Claude 구조화 출력으로 의도(판정/설명)·가구 조건·검색어를 뽑는다. 검색어는 일상어를 지침서 용어로 바꿔 쓴다 ("일해서 번 돈" → "근로소득")
 - **판정은 LLM이 아니라 판정 엔진**이 하고, 판정표도 코드가 만든다. Claude는 이유와 다음 할 일을 설명만 한다
@@ -159,6 +172,7 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 |---|---|
 | `welfare_programs` | 복지제도 (이름, 중위소득 대비 비율, 출처 쪽, 기준 연도 …) |
 | `median_incomes` | 연도·가구원 수별 기준 중위소득 (지침서 표의 1~7인) |
+| `ai_search_logs` | 챗봇 대화 한 턴 기록 — 응답 시간·판정 요약·되물은 조건 수·위기 신호 (집계 분석용) |
 | `guide_chunks` | 지침서 청크 + 항목 경로·구분(본문/서식/부록) + BGE-m3 dense(1024차원)·sparse 임베딩 (pgvector) |
 
 선정기준 금액은 저장하지 않고 판정 엔진(`app/eligibility/threshold.py`)이 계산한다.
@@ -188,3 +202,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 4 | 기본 RAG 파이프라인 | ✅ 글자 수 청킹 + BGE-m3 + pgvector + Claude 인용 답변 (CLI) |
 | 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |
 | 6 | LangGraph 대화형 챗봇 | ✅ 조건 되묻기 루프 + 판정 엔진 결합 + 멀티턴 (CLI, `POST /api/chat`) — 실제 Claude 호출은 API 키 발급 후 확인 필요 |
+| 7 | 도메인 특화 기능 | ✅ 위기 신호 감지·분기, 계산 근거·출처 표시, 무인용 경고, 면책 안내, `ai_search_logs` 기록 |

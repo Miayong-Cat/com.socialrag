@@ -7,6 +7,8 @@ Claude·DB 대신 가짜 함수를 넣어 "그래프가 어느 길로 가는지"
     pytest tests/test_chat_graph.py
 """
 
+from app.chat.crisis import detect
+from app.chat.format import DISCLAIMER, UNCITED_WARNING, format_basis
 from app.chat.graph import Deps
 from app.chat.session import Chatbot
 from app.chat.state import HouseholdInfo, missing_fields, question_for, to_household
@@ -23,6 +25,8 @@ class Fake:
         self.searched: list[str] = []
         self.judged = []
         self.answered = []
+        self.logs: list[dict] = []
+        self.sources = [Source(page=131, section="Ⅲ. 소득조사", quote="30% 공제")]  # 가짜 Claude 가 인용한 문장
 
     def understand(self, messages, known, asked):
         return self.understandings.pop(0)
@@ -33,14 +37,26 @@ class Fake:
 
     def judge(self, household):
         self.judged.append(household)
-        return [{"program": "생계급여", "eligible": True, "recognized_income": 770_000, "threshold": 820_556}]
+        return [JUDGEMENT]
 
     def answer(self, question, passages, facts):
         self.answered.append((question, facts))
-        return Answer(text="설명입니다.", sources=[Source(page=131, section="Ⅲ. 소득조사", quote="30% 공제")])
+        return Answer(text="설명입니다.", sources=self.sources)
+
+    def log(self, **fields):
+        self.logs.append(fields)
 
     def bot(self) -> Chatbot:
-        return Chatbot(Deps(understand=self.understand, search=self.search, judge=self.judge, answer=self.answer))
+        deps = Deps(understand=self.understand, search=self.search, judge=self.judge, answer=self.answer)
+        return Chatbot(deps, log=self.log)  # 로그도 가짜 — 실제 DB 에 쓰지 않음
+
+
+# 가짜 판정 결과 하나 (app/schemas.py 의 ProgramJudgement 모양)
+JUDGEMENT = {
+    "program": "생계급여", "income_ratio": 32, "income_evaluation": 770_000, "asset_conversion": 0,
+    "recognized_income": 770_000, "threshold": 820_556, "eligible": True, "margin": 50_556,
+    "source_document": "2026 국민기초생활보장 사업안내", "source_page": 14,
+}
 
 
 def u(intent, query="검색어", **household):
@@ -53,7 +69,9 @@ def test_info_question_skips_eligibility():
     reply = fake.bot().send("t", "일해서 번 돈은 얼마나 빼주나요?")
 
     assert not reply.waiting
-    assert reply.text == "설명입니다."
+    assert reply.text.startswith("설명입니다.")
+    assert "p.131 [Ⅲ. 소득조사] “30% 공제”" in reply.text   # 출처 (코드가 붙임)
+    assert reply.text.endswith(DISCLAIMER)                    # 면책 안내
     assert fake.searched == ["근로소득 공제 기준"]
     assert fake.judged == []
     assert reply.sources == [{"page": 131, "section": "Ⅲ. 소득조사", "quote": "30% 공제"}]
@@ -81,6 +99,7 @@ def test_asks_missing_conditions_then_judges():
     assert third.eligibility[0]["program"] == "생계급여"
     assert third.text.startswith("| 급여 | 결과 |")          # 판정표는 코드가 만들어 앞에 붙임
     assert "✅ 충족 | 770,000원 | 820,556원" in third.text
+    assert format_basis([JUDGEMENT]) in third.text             # 계산 근거
 
     household = fake.judged[0]
     assert (household.size, household.region, household.earners[0].monthly_income) == (1, Region.SEOUL, 1_100_000)
@@ -142,3 +161,71 @@ def test_chat_api_continues_thread(client):
     assert not second["waiting"]
     assert second["eligibility"][0]["program"] == "생계급여"
     assert fake.judged[0].size == 3
+
+
+# ── 7단계: 위기 신호 · 답변 형식 · 로그 ─────────────────────────
+
+
+def test_detect_crisis_levels():
+    """자살 신호는 stop, 학대·긴급 생계는 notice, 일반 질문은 None."""
+    assert detect("요즘 너무 힘들어서 죽고 싶어요").level == "stop"
+    assert detect("남편이 때려요").category == "abuse"
+    assert detect("가정폭력 피해자도 특례가 있나요?").level == "notice"   # 제도 질문도 안내 + 답변 계속
+    assert detect("며칠째 굶고 있어요").category == "livelihood"
+    assert detect("생계급여 선정기준이 뭔가요?") is None
+
+
+def test_suicide_signal_stops_normal_flow():
+    """자살 신호: 상담 전화만 안내하고 이해·검색·판정을 하지 않는다."""
+    fake = Fake([])
+    reply = fake.bot().send("t", "다 끝내고 싶어요. 생계급여 받을 수 있나요?")
+
+    assert reply.crisis == "suicide"
+    assert "109" in reply.text
+    assert fake.searched == [] and fake.judged == []
+    assert fake.logs[0]["crisis"] == "suicide" and fake.logs[0]["intent"] is None
+
+
+def test_livelihood_notice_is_prefixed_and_flow_continues():
+    """긴급 생계 신호: 긴급복지지원 안내를 맨 앞에 붙이고 질문에는 그대로 답한다."""
+    fake = Fake([u("info")])
+    reply = fake.bot().send("t", "쌀이 떨어졌는데 어디서 도움 받을 수 있나요?")
+
+    assert reply.crisis == "livelihood"
+    assert reply.text.startswith(detect("쌀이 떨어졌어요").message)
+    assert "설명입니다." in reply.text
+
+
+def test_crisis_checked_in_condition_answers():
+    """되묻기에 대한 답에서도 위기 신호를 살핀다 (되묻기 루프가 crisis_check 를 거침)."""
+    fake = Fake([u("eligibility", size=1)])
+    bot = fake.bot()
+    bot.send("t", "받을 수 있나요?")
+    reply = bot.send("t", "서울이고 소득은 없어요. 그냥 살기 싫어요")
+    assert reply.crisis == "suicide"
+    assert "109" in reply.text
+
+
+def test_uncited_answer_gets_warning():
+    """Claude 답변에 지침서 인용이 하나도 없으면 경고를 붙인다 (환각 방지)."""
+    fake = Fake([u("info")])
+    fake.sources = []
+    reply = fake.bot().send("t", "기초연금은 얼마인가요?")
+    assert UNCITED_WARNING in reply.text
+
+
+def test_turns_are_logged():
+    """턴마다 로그: 되묻기 턴은 부족한 조건 수, 판정 턴은 판정 요약·검색 문서 수."""
+    fake = Fake([
+        u("eligibility", size=1, region="서울"),
+        u("eligibility", earned_income=0, housing=0, general=0, financial=0, car_full_rate=0, debt=0),
+    ])
+    bot = fake.bot()
+    bot.send("t", "받을 수 있나요?")
+    bot.send("t", "소득도 재산도 없어요")
+
+    asking, judged = fake.logs
+    assert (asking["waiting"], asking["missing_fields_count"], asking["eligibility_result"]) == (True, 2, None)
+    assert (judged["waiting"], judged["retrieved_doc_count"]) == (False, 1)
+    assert judged["eligibility_result"] == {"생계급여": True}
+    assert judged["intent"] == "eligibility" and judged["response_time_ms"] >= 0

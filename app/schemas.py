@@ -98,6 +98,7 @@ class ProgramJudgement(BaseModel):
     """제도 하나의 판정 결과 + 계산 내역. (나중에 챗봇이 판정 이유를 설명할 때 이 숫자를 쓴다)"""
 
     program: str                 # 제도 이름
+    income_ratio: float          # 선정기준 = 기준 중위소득의 몇 % 이하 (예: 생계급여 32)
     income_evaluation: int       # 소득평가액 — 제도마다 다를 수 있음 (의료급여는 일반 30% 공제 없음)
     asset_conversion: int        # 재산의 소득환산액 — 모든 제도 같음
     recognized_income: int       # 소득인정액 = 소득평가액 + 재산의 소득환산액

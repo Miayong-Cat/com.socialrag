@@ -1,14 +1,17 @@
-"""챗봇 그래프 (LangGraph) — 조건을 되묻고, 판정하고, 지침서 근거로 설명한다.
+"""챗봇 그래프 (LangGraph) — 위기 신호를 살피고, 조건을 되묻고, 판정하고, 지침서 근거로 설명한다.
 
-    START → understand ─(info: 제도 설명 질문)────────────────────────────→ retrieve → generate → END
-                │ (eligibility: 받을 수 있나요?)                              ▲
-                ▼                                                             │
-         condition_check ─(조건이 다 모임)→ eligibility_check ────────────────┘
+    START → crisis_check ─(자살·자해 신호)→ crisis_handler → END      상담 전화 안내만 (일반 흐름 중단)
+                │ (그 밖: 학대·긴급 생계는 안내를 붙이고 계속)
+                ▼
+            understand ─(info: 제도 설명 질문)────────────────────────→ retrieve → generate → END
+                │ (eligibility: 받을 수 있나요?)                          ▲
+                ▼                                                         │
+         condition_check ─(조건이 다 모임)→ eligibility_check ────────────┘
                 │ (부족)
                 ▼
           ask_condition ── interrupt(질문): 사용자의 답을 기다림
                 │            (API·CLI 가 Command(resume=답)으로 다시 실행)
-                └──→ understand 로 되돌아감   ← 되묻기 루프
+                └──→ crisis_check 로 되돌아감   ← 되묻기 루프 (답에도 위기 신호가 있는지 다시 살핌)
 
 왜 체인이 아니라 그래프인가:
     조건이 부족하면 되묻고, 답을 받아 다시 확인하는 "되돌아가는 화살표"가 필요하다.
@@ -26,6 +29,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
+from app.chat.crisis import detect
+from app.chat.format import compose, format_basis, format_judgements
 from app.chat.state import ChatState, HouseholdInfo, merge, missing_fields, question_for, to_household
 from app.chat.understand import Understanding
 from app.eligibility.household import Household
@@ -42,17 +47,25 @@ class Deps:
     answer: Callable[[str, list[dict], str | None], Answer]                     # 질문·청크·판정 요약 → 답변
 
 
-def format_judgements(results: list[dict]) -> str:
-    """판정 결과 → 사람이 읽을 표 (코드가 만든다 — 숫자를 LLM 이 옮겨 적다 틀리지 않도록)."""
-    lines = ["| 급여 | 결과 | 소득인정액 | 선정기준액 |", "|---|---|---|---|"]
-    for r in results:
-        mark = "✅ 충족" if r["eligible"] else "❌ 미충족"
-        lines.append(f"| {r['program']} | {mark} | {r['recognized_income']:,}원 | {r['threshold']:,}원 |")
-    return "\n".join(lines)
-
-
 def build_graph(deps: Deps, checkpointer=None):
     """그래프를 만들어 compile 한다. checkpointer 가 대화별 상태를 저장한다 (기본: 메모리)."""
+
+    def crisis_check_node(state: ChatState) -> dict:
+        """마지막 사용자 말에 위기 신호가 있는지 규칙으로 살핀다 (모든 사용자 메시지마다)."""
+        crisis = detect(state["messages"][-1]["content"])
+        if crisis is None:
+            return {"crisis": "", "notice": ""}
+        notice = crisis.message if crisis.level == "notice" else ""
+        return {"crisis": crisis.category, "notice": notice}
+
+    def route_after_crisis(state: ChatState) -> str:
+        # 신호가 있는데 붙일 안내(notice)가 없다 = "stop" 단계 위기
+        return "crisis_handler" if state["crisis"] and not state["notice"] else "understand"
+
+    def crisis_handler_node(state: ChatState) -> dict:
+        """자살·자해 신호: 일반 흐름 대신 상담 전화를 안내하고 끝낸다."""
+        message = detect(state["messages"][-1]["content"]).message
+        return {"answer": message, "sources": [], "messages": [{"role": "assistant", "content": message}]}
 
     def understand_node(state: ChatState) -> dict:
         """마지막 사용자 말에서 의도·조건·검색어를 뽑아 상태에 반영한다."""
@@ -100,14 +113,20 @@ def build_graph(deps: Deps, checkpointer=None):
         return {"passages": deps.search(state["search_query"])}
 
     def generate_node(state: ChatState) -> dict:
-        """근거 청크(+ 판정 결과)로 답변을 만든다. 판정 결과 표는 코드가 만들어 답변 앞에 붙인다."""
-        table = format_judgements(state["eligibility"]) if state["intent"] == "eligibility" else None
-        result = deps.answer(state["question"], state["passages"], table)
-        reply = f"{table}\n\n{result.text}" if table else result.text
+        """근거 청크(+ 판정 결과)로 답변을 만든다.
+
+        판정표·계산 근거·출처·면책 안내는 코드가 만들어 붙이고(app/chat/format.py), Claude 는 설명만 쓴다.
+        """
+        judgements = state["eligibility"] if state["intent"] == "eligibility" else None
+        facts = f"{format_judgements(judgements)}\n{format_basis(judgements)}" if judgements else None
+        result = deps.answer(state["question"], state["passages"], facts)
         sources = [{"page": s.page, "section": s.section, "quote": s.quote} for s in result.sources]
+        reply = compose(result.text, sources, judgements)
         return {"answer": reply, "sources": sources, "messages": [{"role": "assistant", "content": reply}]}
 
     graph = StateGraph(ChatState)
+    graph.add_node("crisis_check", crisis_check_node)
+    graph.add_node("crisis_handler", crisis_handler_node)
     graph.add_node("understand", understand_node)
     graph.add_node("condition_check", condition_check_node)
     graph.add_node("ask_condition", ask_condition_node)
@@ -115,10 +134,12 @@ def build_graph(deps: Deps, checkpointer=None):
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("generate", generate_node)
 
-    graph.add_edge(START, "understand")
+    graph.add_edge(START, "crisis_check")
+    graph.add_conditional_edges("crisis_check", route_after_crisis, ["crisis_handler", "understand"])
+    graph.add_edge("crisis_handler", END)
     graph.add_conditional_edges("understand", route_after_understand, ["condition_check", "retrieve"])
     graph.add_conditional_edges("condition_check", route_after_check, ["ask_condition", "eligibility_check"])
-    graph.add_edge("ask_condition", "understand")  # 되묻기 루프
+    graph.add_edge("ask_condition", "crisis_check")  # 되묻기 루프 (답도 위기 신호부터 살핌)
     graph.add_edge("eligibility_check", "retrieve")
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", END)

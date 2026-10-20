@@ -51,6 +51,7 @@ def judge(db: Session, household: Household, year: int) -> list[ProgramJudgement
     return [
         ProgramJudgement(
             program=j.program,
+            income_ratio=p.max_income_ratio,
             income_evaluation=income_evaluation(household, j.program),
             asset_conversion=asset,
             recognized_income=j.recognized_income,
