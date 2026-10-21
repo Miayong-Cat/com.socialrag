@@ -66,9 +66,9 @@ def build_graph(deps: Deps, checkpointer=None):
         """마지막 사용자 말에 위기 신호가 있는지 규칙으로 살핀다 (모든 사용자 메시지마다)."""
         crisis = detect(state["messages"][-1]["content"])
         if crisis is None:
-            return {"crisis": "", "notice": ""}
+            return {"crisis": "", "crisis_level": "", "notice": ""}
         notice = crisis.message if crisis.level == "notice" else ""
-        return {"crisis": crisis.category, "notice": notice}
+        return {"crisis": crisis.category, "crisis_level": crisis.level, "notice": notice}
 
     def route_after_crisis(state: ChatState) -> str:
         # 신호가 있는데 붙일 안내(notice)가 없다 = "stop" 단계 위기

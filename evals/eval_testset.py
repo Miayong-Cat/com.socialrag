@@ -227,7 +227,7 @@ def run_chat(items: list[dict], bot) -> list[dict]:
                 "contexts": [p["text"] for p in state.get("passages") or []],
                 "reference": it["reference"],
             }
-        level = ("notice" if state.get("notice") else "stop") if reply.crisis else None  # 안내만 붙였나, 흐름을 멈췄나
+        level = state.get("crisis_level") or None  # 그래프가 기록한 대응 단계 (stop/notice)
         rows.append(row | crisis_check(it, reply.crisis or None, level))
     return rows
 

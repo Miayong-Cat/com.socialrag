@@ -50,6 +50,7 @@ def create_tables() -> None:
 # (마이그레이션 도구를 쓰기 전까지의 최소한의 방법 — IF NOT EXISTS 라 여러 번 실행해도 안전)
 SCHEMA_UPDATES = [
     "ALTER TABLE ai_search_logs ADD COLUMN IF NOT EXISTS error TEXT",  # 실패한 턴 기록 (app/models/ai_search_log.py)
+    "ALTER TABLE ai_search_logs ADD COLUMN IF NOT EXISTS crisis_level VARCHAR",  # 위기 대응 단계 stop/notice
     # 같은 이름·연도 제도 중복 금지 (app/models/welfare_program.py 의 UniqueConstraint 와 같은 이름)
     "CREATE UNIQUE INDEX IF NOT EXISTS uq_welfare_programs_name_year ON welfare_programs (name, updated_year)",
 ]

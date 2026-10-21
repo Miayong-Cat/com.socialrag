@@ -28,6 +28,7 @@ class AiSearchLog(Base):
     question: Mapped[str] = mapped_column(Text)         # 사용자가 이번 턴에 보낸 메시지
     intent: Mapped[str | None]                          # "eligibility" / "info" (위기 중단이면 None)
     crisis: Mapped[str | None]                          # 위기 신호 종류 (없으면 None)
+    crisis_level: Mapped[str | None] = mapped_column(default=None)  # "stop"(흐름 멈춤) / "notice"(안내만 붙이고 답함)
     retrieved_doc_count: Mapped[int]                    # 검색한 지침서 청크 수 (검색 안 했으면 0)
     response_time_ms: Mapped[int]                       # 응답까지 걸린 시간 (밀리초)
     waiting: Mapped[bool]                               # True = 이번 답이 조건 되묻기

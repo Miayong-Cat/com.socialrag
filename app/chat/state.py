@@ -148,6 +148,7 @@ class ChatState(TypedDict, total=False):
     eligibility: list[dict]     # 판정 결과 (app/schemas.py 의 ProgramJudgement)
     passages: list[dict]        # 검색한 지침서 청크 {page, section, heading, text}
     crisis: str                 # 이번 메시지의 위기 신호 종류 ("" = 없음) — app/chat/crisis.py
+    crisis_level: str           # 위기 대응 단계 "stop"(흐름 멈춤) / "notice"(안내 붙이고 계속) / "" — 로그·평가가 추측하지 않게 그대로 남김
     notice: str                 # 답 앞에 붙일 위기 안내 ("" = 없음)
     answer: str                 # 이번 턴의 최종 답변
     sources: list[dict]         # 답변 근거 {page, section, quote}

@@ -125,8 +125,9 @@ class Chatbot:
             thread_id=thread_id,
             question=message,
             # 위기 중단(stop) 턴은 의도를 알아보지 않았으므로 None — 안내만 붙인(notice) 턴은 의도가 있다
-            intent=None if reply.crisis and not result.get("notice") else result.get("intent"),
+            intent=None if result.get("crisis_level") == "stop" else result.get("intent"),
             crisis=reply.crisis or None,
+            crisis_level=result.get("crisis_level") or None,
             retrieved_doc_count=0 if reply.waiting else len(result.get("passages") or []),
             response_time_ms=round((time.perf_counter() - started) * 1000),
             waiting=reply.waiting,

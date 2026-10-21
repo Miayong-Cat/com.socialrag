@@ -8,7 +8,7 @@
 | 종류        | 대응 (level)                                  | 이유                                         |
 |-------------|-----------------------------------------------|----------------------------------------------|
 | suicide     | stop   — 일반 흐름을 멈추고 상담 전화 안내만   | 지금 당장의 안전이 먼저                       |
-|             | notice — 제도 질문 속 낱말일 때만 (detect 참고) | "자살예방 지원 제도"를 물으면 답도 해야 함    |
+|             | notice — 제도 이름 속 낱말뿐일 때만 (detect)    | "자살예방 지원 제도"를 물으면 답도 해야 함    |
 | abuse       | notice — 안내를 맨 앞에 붙이고 답변은 계속     | "가정폭력 피해자 특례" 같은 제도 질문도 많음  |
 | livelihood  | notice — 긴급복지지원 안내 + 답변 계속         | 수급 판정·신청 안내가 바로 도움이 됨          |
 
@@ -37,8 +37,9 @@ RULES = [
         "suicide",
         "stop",
         re.compile(
-            r"죽고\s*싶|자살|극단적\s*선택|목숨을\s*끊|살기\s*싫|살고\s*싶지\s*않|사라지고\s*싶|"
-            r"다\s*끝내고\s*싶|세상을\s*떠나고\s*싶|자해|손목을\s*긋|유서"
+            r"죽고\s*싶|죽을래|죽어\s*버[리릴렸려]|자살|자\s*ㅅ\s*ㅏ\s*ㄹ|극단적인?\s*선택|목숨\s*(을\s*)?끊|살기\s*싫|살고\s*싶지\s*않|"
+            r"사라지고\s*싶|다\s*끝내고\s*싶|세상을\s*떠나고\s*싶|뛰어내리|자해|손목\s*(을\s*)?긋|유서|"
+            r"따라\s*(가고\s*싶|죽)|약을\s*모아"
         ),
         "많이 힘드신 것 같아요. 지금 이야기해 주셔서 고맙습니다.\n"
         "혼자 견디지 않으셔도 됩니다. 지금 바로 전문 상담사와 이야기할 수 있어요.\n\n"
@@ -68,30 +69,39 @@ RULES = [
 ]
 
 
-# 자살 신호 중 "본인의 지금 마음"이 드러나는 말 — 정보 질문 문맥이 함께 있어도 항상 stop
-SUICIDE_FIRST_PERSON = re.compile(
-    r"죽고\s*싶|자살\s*(하고\s*싶|할\s*(까|거|래)|생각)|목숨을\s*끊|살기\s*싫|살고\s*싶지\s*않|사라지고\s*싶|"
-    r"다\s*끝내고\s*싶|세상을\s*떠나고\s*싶|손목을\s*긋|유서|자해\s*(하고\s*싶|했|하고\s*있)"
+# 제도·사업·통계의 "이름" 속에 들어간 자살·자해 낱말 — 이것만 지워 보고 남은 말에 위기 신호가 없을 때만 notice 로 낮춘다
+#   낮춰도 되는 경우를 좁게 나열한다 (반대로 "낮추면 안 되는 말"을 나열하면 위기 표현이 끝없이 다양해 반드시 샌다 — 5차 독립 리뷰)
+#   "자살 시도자 지원"(제도 이름)은 지워지지만 "자살 시도했어요"(본인 일)의 '시도했'은 남으므로 stop
+SUICIDE_PROGRAM_TERMS = re.compile(
+    r"자살\s*(예방|유가족|유족|고위험군|시도자|률|통계)|자해\s*(청소년|예방)"
 )
-# 제도·사업을 묻는 정보 질문 문맥 — "자살예방 상담 지원 제도가 있나요?", "자살 유가족 지원 사업"
-INFO_CONTEXT = re.compile(r"예방|지원|제도|사업|센터|기관|정책|유가족|프로그램|상담\s*(전화|번호|센터)|급여|혜택|신청")
+# 제도 이름을 지운 나머지에 이런 말이 있으면 "본인·가족의 지금 일"일 수 있다 — 그래도 stop (확신이 없으면 멈추는 쪽)
+#   "자살 시도자 지원 받을 수 있나요? 제가 어제 시도했어요" → 제도 이름을 지우면 '자살' 낱말이 사라지지만 '제가·어제·시도했' 이 남음
+#   ("자살예방 사업을 알고 싶어요" 같은 정보 질문도 '싶' 때문에 멈추지만, 이 정도 오탐은 감수한다)
+PERSONAL_MARKERS = re.compile(
+    r"시도\s*(했|하|할)|하려|할\s*것|싶|충동|생각|직전|중이|계속|"
+    r"제가|저도|저는|나도|내가|난\s|엄마|아빠|남편|아내|아들|딸|친구|가족|어제|오늘|지금|방금|약을"
+)
 SUICIDE_INFO_NOTICE = (
     "※ 혹시 지금 힘든 마음이 드신다면 **자살예방 상담전화 109**(24시간, 무료)에서 바로 이야기할 수 있어요. "
-    "정신건강 위기상담 **1577-0199**도 24시간 열려 있어요."
+    "정신건강 위기상담 **1577-0199**도 24시간 열려 있어요. 지금 위험한 상황이라면 **119** 또는 **112**."
 )
 
 
 def detect(text: str) -> Crisis | None:
     """말 한 마디 → 위기 신호 (없으면 None).
 
-    자살 신호의 예외: "자살·자해" 같은 낱말이 제도·사업을 묻는 정보 질문 안에만 있고 본인의 지금 마음(SUICIDE_FIRST_PERSON)이
-    드러나지 않으면 stop 대신 notice — 109 안내를 앞에 붙이고 질문에도 답한다.
-    (전에는 "자살예방 상담 지원 제도가 있나요?"도 흐름을 멈춰 질문에 답하지 못했다 — 4차 독립 리뷰)
-    놓치지 않는 쪽은 그대로다: 종류(category)는 여전히 suicide 이고, 안내도 항상 보여 준다.
+    자살 신호의 예외: 자살·자해 낱말이 **제도·사업·통계 이름 속에만** 있고(SUICIDE_PROGRAM_TERMS 를 지운 나머지에 신호가 없고)
+    나머지에 본인·가족의 지금 일로 보이는 말(PERSONAL_MARKERS)도 없을 때만 stop 대신 notice —
+    109·119 안내를 앞에 붙이고 질문에도 답한다. ("자살예방 상담 지원 제도가 있나요?")
+    그 밖에는 "지원·센터·급여" 같은 말이 함께 있어도 항상 stop — 복지 상담이라 위기에 처한 사람의 말에도 이런 낱말이 늘 들어간다.
+    종류(category)는 어느 쪽이든 suicide 이고, 안내도 항상 보여 준다.
     """
     for category, level, pattern, message in RULES:
         if pattern.search(text):
-            if category == "suicide" and not SUICIDE_FIRST_PERSON.search(text) and INFO_CONTEXT.search(text):
-                return Crisis(category=category, level="notice", message=SUICIDE_INFO_NOTICE)
+            if category == "suicide" and SUICIDE_PROGRAM_TERMS.search(text):
+                rest = SUICIDE_PROGRAM_TERMS.sub(" ", text)  # 제도 이름을 지운 나머지
+                if not pattern.search(rest) and not PERSONAL_MARKERS.search(rest):
+                    return Crisis(category=category, level="notice", message=SUICIDE_INFO_NOTICE)
             return Crisis(category=category, level=level, message=message)
     return None

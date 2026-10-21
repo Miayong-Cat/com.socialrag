@@ -46,6 +46,7 @@ class Turn:
     missing_fields_count: int
     eligibility_result: dict | None
     error: str | None = None  # 실패한 턴이면 오류 (성공이면 None)
+    crisis_level: str | None = None  # "stop" / "notice" (이 칸이 생기기 전 기록은 None)
 
 
 def percentile(values: list[int], p: float) -> int:
@@ -65,7 +66,12 @@ def latency(values: list[int]) -> dict:
 
 
 def crisis_stopped(t: Turn) -> bool:
-    """위기 신호로 일반 흐름을 멈춘 턴 — 자살 신호라도 제도 질문이면 안내만 붙이고 답하므로(notice) 의도가 남는다."""
+    """위기 신호로 일반 흐름을 멈춘 턴. 기록된 대응 단계(crisis_level)를 그대로 쓴다.
+
+    이 칸이 생기기 전 기록만 추측한다: 자살 신호 + 의도 없음 = 멈춤 (그때는 자살 신호면 항상 멈췄음).
+    """
+    if t.crisis_level:
+        return t.crisis_level == "stop"
     return t.crisis == "suicide" and t.intent is None
 
 
