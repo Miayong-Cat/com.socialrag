@@ -56,3 +56,4 @@ WORK_DEDUCTION_RULES = {
 
 # 일반 수급자(GENERAL)의 30% 공제가 적용되는 급여 — 의료급여는 빠져 있다 (p.131 "생계･주거･교육급여 수급(권)자")
 GENERAL_DEDUCTION_PROGRAMS = {"생계급여", "주거급여", "교육급여"}
+WORK_DEDUCTION_PAGE = 131  # 근로소득공제 규칙이 있는 지침서 쪽 (계산 근거 표시용)

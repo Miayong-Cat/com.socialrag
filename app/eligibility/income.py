@@ -47,10 +47,15 @@ def work_deduction(earner: Earner, program: str) -> int:
     return deduction_by_rule(earner.monthly_income, base, percent)
 
 
+def total_work_deduction(household: Household, program: str) -> int:
+    """가구 전체의 근로소득공제액(원/월) — 소득자별 공제액의 합."""
+    return sum(work_deduction(e, program) for e in household.earners)
+
+
 def income_evaluation(household: Household, program: str) -> int:
     """가구의 소득평가액(원/월). program 은 급여 이름 (예: "생계급여")."""
     earned = sum(e.monthly_income for e in household.earners)                  # 근로·사업소득 합계
-    deductions = sum(work_deduction(e, program) for e in household.earners)    # 근로소득공제 합계
+    deductions = total_work_deduction(household, program)                       # 근로소득공제 합계
     actual_income = earned + household.other_income                            # 실제소득
     result = actual_income - household.household_expenses - deductions
     return max(result, 0)  # 음수면 0원 (p.125)

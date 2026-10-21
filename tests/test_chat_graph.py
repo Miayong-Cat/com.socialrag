@@ -272,3 +272,18 @@ def test_chat_stream_api(client):
     assert [e["type"] for e in events] == ["delta", "delta", "done"]
     assert events[-1]["reply"].startswith("설명입니다.") and events[-1]["thread_id"]
     assert events[-1]["sources"] == [{"page": 131, "section": "Ⅲ. 소득조사", "quote": "30% 공제"}]
+
+
+def test_basis_explains_work_deduction():
+    """계산 근거에 급여별 근로소득공제와 근거 쪽 — 의료급여만 공제가 없는 이유도 코드가 적는다.
+
+    (이유가 안 보이면 Claude 가 맞는 판정을 "다시 확인하라"고 의심하는 설명을 썼다)
+    """
+    worker = {"earned_income": 1_100_000, "asset_conversion": 0, "income_ratio": 32, "source_page": 14}
+    basis = format_basis([
+        worker | {"program": "생계급여", "work_deduction": 330_000, "income_evaluation": 770_000},
+        worker | {"program": "의료급여", "work_deduction": 0, "income_evaluation": 1_100_000, "income_ratio": 40},
+    ])
+    assert "생계급여: 소득평가액 770,000원 (근로소득 1,100,000원에서 근로소득공제 330,000원을 뺌, p.131)" in basis
+    assert "의료급여: 소득평가액 1,100,000원 (일반 근로소득공제 30%는 생계·주거·교육급여에만 있어 의료급여에는 적용 안 됨, p.131)" in basis
+    assert "근로소득공제" not in format_basis([JUDGEMENT])  # 근로소득이 없으면 공제 설명도 없음

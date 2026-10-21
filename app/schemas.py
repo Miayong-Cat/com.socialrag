@@ -99,7 +99,9 @@ class ProgramJudgement(BaseModel):
 
     program: str                 # 제도 이름
     income_ratio: float          # 선정기준 = 기준 중위소득의 몇 % 이하 (예: 생계급여 32)
-    income_evaluation: int       # 소득평가액 — 제도마다 다를 수 있음 (의료급여는 일반 30% 공제 없음)
+    earned_income: int = 0       # 근로·사업소득 합계 (계산 근거 표시용)
+    work_deduction: int = 0      # 근로소득공제액 — 제도마다 다를 수 있음 (의료급여는 일반 30% 공제 없음)
+    income_evaluation: int       # 소득평가액 = 실제소득 − 가구특성별 지출비용 − 근로소득공제
     asset_conversion: int        # 재산의 소득환산액 — 모든 제도 같음
     recognized_income: int       # 소득인정액 = 소득평가액 + 재산의 소득환산액
     threshold: int               # 선정기준액

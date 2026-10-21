@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.eligibility.asset import asset_conversion
 from app.eligibility.household import Household
-from app.eligibility.income import income_evaluation
+from app.eligibility.income import income_evaluation, total_work_deduction
 from app.eligibility.judge import judge_household
 from app.eligibility.threshold import TABLE_MAX_SIZE
 from app.models import MedianIncome, WelfareProgram
@@ -52,6 +52,8 @@ def judge(db: Session, household: Household, year: int) -> list[ProgramJudgement
         ProgramJudgement(
             program=j.program,
             income_ratio=p.max_income_ratio,
+            earned_income=sum(e.monthly_income for e in household.earners),
+            work_deduction=total_work_deduction(household, j.program),
             income_evaluation=income_evaluation(household, j.program),
             asset_conversion=asset,
             recognized_income=j.recognized_income,

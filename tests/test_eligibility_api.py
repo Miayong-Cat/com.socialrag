@@ -58,6 +58,11 @@ def test_worker_one_person(client, loaded):
     assert results["의료급여"]["recognized_income"] == 1_100_000
     assert results["의료급여"]["margin"] == 1_025_695 - 1_100_000
 
+    # 계산 내역: 근로소득과 급여별 공제액 (의료급여는 일반 공제 없음)
+    assert livelihood["earned_income"] == results["의료급여"]["earned_income"] == 1_100_000
+    assert livelihood["work_deduction"] == 330_000
+    assert results["의료급여"]["work_deduction"] == 0
+
 
 def test_asset_is_included(client, loaded):
     """p.191 예시1: 세종, 주거용재산 1억6,600만 + 일반재산 3천만 → 재산의 소득환산액 2,802,600원.

@@ -122,6 +122,7 @@ def judgement_table(results: list[dict]) -> pd.DataFrame:
             "소득인정액": won(r["recognized_income"]),
             "선정기준액": won(r["threshold"]),
             "여유(+) / 초과(−)": f"{r['margin']:+,}원",
+            "근로소득공제": won(r.get("work_deduction", 0)),
             "소득평가액": won(r["income_evaluation"]),
             "재산 환산액": won(r["asset_conversion"]),
             "기준": f"중위소득 {r['income_ratio']:g}%",

@@ -12,6 +12,7 @@ Claude 가 쓰는 부분은 "왜 그런지, 다음에 뭘 하면 되는지" 설�
 """
 
 from app.config import GUIDE_TITLE
+from app.eligibility.standards import WORK_DEDUCTION_PAGE
 
 INCOME_RECOGNITION_PAGE = 77   # 소득인정액 = 소득평가액 + 재산의 소득환산액 (지침서 쪽)
 
@@ -39,7 +40,9 @@ def format_basis(results: list[dict]) -> str:
     """판정표 숫자가 어떻게 나왔는지 — 계산식과 근거 쪽.
 
     재산 환산액은 모든 급여가 같으므로 한 번만 쓰고, 급여마다 소득평가액·선정기준만 쓴다.
-    (의료급여는 일반 근로소득 30% 공제가 없어 소득평가액이 다를 수 있다)
+    근로소득이 있으면 급여마다 근로소득공제액과 그 근거 쪽도 쓴다 —
+    의료급여는 일반 근로소득 30% 공제가 없어 소득평가액이 다를 수 있는데, 이유가 안 보이면
+    Claude 가 (검색된 문단에 근거가 없을 때) 맞는 판정을 의심하는 설명을 쓰기 때문이다.
     """
     if not results:
         return ""
@@ -50,10 +53,19 @@ def format_basis(results: list[dict]) -> str:
     for r in results:
         page = f", p.{r['source_page']}" if r.get("source_page") else ""
         lines.append(
-            f"- {r['program']}: 소득평가액 {r['income_evaluation']:,}원 · "
+            f"- {r['program']}: 소득평가액 {r['income_evaluation']:,}원{deduction_note(r)} · "
             f"선정기준액 = 기준 중위소득 × {r['income_ratio']:g}%{page}"
         )
     return "\n".join(lines)
+
+
+def deduction_note(r: dict) -> str:
+    """소득평가액 뒤에 붙일 근로소득공제 설명. 근로소득이 없으면 빈 글."""
+    if not r.get("earned_income"):
+        return ""
+    if r.get("work_deduction"):
+        return f" (근로소득 {r['earned_income']:,}원에서 근로소득공제 {r['work_deduction']:,}원을 뺌, p.{WORK_DEDUCTION_PAGE})"
+    return f" (일반 근로소득공제 30%는 생계·주거·교육급여에만 있어 {r['program']}에는 적용 안 됨, p.{WORK_DEDUCTION_PAGE})"
 
 
 def format_sources(sources: list[dict]) -> str:
