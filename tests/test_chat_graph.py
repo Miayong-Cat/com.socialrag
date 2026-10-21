@@ -490,3 +490,13 @@ def test_idle_threads_are_forgotten():
     bot.send("new", "질문")
     assert state("old") == {} and "old" not in bot.last_used
     assert state("recent") and state("new")
+
+
+def test_message_length_is_capped(client):
+    """메시지 글자 수 상한 — 긴 글 한 번이 매 턴 Claude 입력·메모리를 계속 키우지 않게."""
+    from app.main import app
+    from app.routes.chat import MAX_MESSAGE_CHARS, get_chatbot
+
+    app.dependency_overrides[get_chatbot] = lambda: Fake([]).bot()
+    assert client.post("/api/chat", json={"message": "가" * (MAX_MESSAGE_CHARS + 1)}).status_code == 422
+    assert client.post("/api/chat/stream", json={"message": "가" * (MAX_MESSAGE_CHARS + 1)}).status_code == 422

@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field
 from app.chat.session import Chatbot, Reply
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+MAX_MESSAGE_CHARS = 2000  # 메시지 하나의 최대 글자 수 (상담 질문으로는 충분)
 logger = logging.getLogger(__name__)
 
 
@@ -38,7 +39,8 @@ class ChatRequest(BaseModel):
     """챗봇에 보내는 메시지."""
 
     thread_id: str | None = Field(default=None, description="이어 갈 대화 번호. 첫 메시지는 비워 둔다")
-    message: str = Field(min_length=1, examples=["혼자 사는데 생계급여 받을 수 있나요?"])
+    # 상한: 메시지는 대화 기록에 쌓여 매 턴 Claude 에 다시 들어가므로, 아주 긴 글 한 번이 비용·메모리를 계속 키운다
+    message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS, examples=["혼자 사는데 생계급여 받을 수 있나요?"])
 
 
 class ChatResponse(BaseModel):

@@ -32,6 +32,7 @@ DEDUCTIONS = {
     "장애인 직업재활 참여 (20만원 + 50%)": "20만원 + 50%",
 }
 MAN = 10_000
+MAX_MESSAGE_CHARS = 2000  # API(app/routes/chat.py)와 같은 상한 — 화면에서 먼저 막는다
 EXAMPLES = [
     "혼자 사는데 생계급여 받을 수 있나요?",
     "서울 1인 가구고 월급 110만원, 재산은 없어요. 어떤 급여를 받을 수 있나요?",
@@ -153,7 +154,7 @@ def chat_tab(api: ApiClient):
 
     # 탭 안의 chat_input 은 부른 자리에 그려진다 → 대화 기록 자리를 먼저 잡아 두고 입력창은 그 아래에
     history = st.container()
-    prompt = st.chat_input("예: 혼자 사는데 생계급여 받을 수 있나요?")
+    prompt = st.chat_input("예: 혼자 사는데 생계급여 받을 수 있나요?", max_chars=MAX_MESSAGE_CHARS)
 
     with history:
         intro = st.empty()  # 첫 화면 안내 — 질문을 보내면 지운다
