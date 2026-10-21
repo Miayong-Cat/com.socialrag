@@ -8,7 +8,7 @@ Claude·DB 대신 가짜 함수를 넣어 "그래프가 어느 길로 가는지"
 """
 
 from app.chat.crisis import detect
-from app.chat.format import DISCLAIMER, UNCITED_WARNING, format_basis
+from app.chat.format import ASSUMPTION_NOTES, DISCLAIMER, UNCITED_WARNING, format_basis, give_up_message
 from app.chat.graph import Deps
 from app.chat.session import Chatbot, Reply
 from app.chat.state import HouseholdInfo, missing_fields, question_for, to_household
@@ -62,8 +62,8 @@ JUDGEMENT = {
 }
 
 
-def u(intent, query="검색어", **household):
-    return Understanding(intent=intent, household=HouseholdInfo(**household), search_query=query)
+def u(intent, query="검색어", new_question=False, **household):
+    return Understanding(intent=intent, household=HouseholdInfo(**household), search_query=query, new_question=new_question)
 
 
 def test_info_question_skips_eligibility():
@@ -372,3 +372,54 @@ def test_chat_applies_deposit_rate_like_api():
     api = EligibilityRequest(size=1, region="서울", housing=120_000_000, rented=True)
     assert to_household(info).housing == api.to_household().housing == 114_000_000
     assert to_household(info.model_copy(update={"rented": False})).housing == 120_000_000
+
+
+# ── 되묻기에 갇히지 않기 (2차 독립 리뷰) ─────────────────────────
+
+WORKER = dict(size=1, region="서울", earned_income=1_100_000, housing=0, general=0, financial=0, car_full_rate=0, debt=0)
+
+
+def test_unknown_deduction_is_assumed_after_two_asks():
+    """공제 유형에 "모르겠어요"를 반복하면 MAX_ASKS 번만 묻고, 일반 공제로 가정해 판정 + "가정함" 안내.
+
+    (전에는 같은 질문을 끝없이 반복했고, 매 턴 Claude 를 불렀다)
+    """
+    fake = Fake([u("eligibility", **WORKER), u("eligibility"), u("eligibility")])
+    bot = fake.bot()
+    assert bot.send("t", "서울 혼자 월 110만원, 재산 없어요").text == question_for(["deduction"])
+    assert bot.send("t", "모르겠어요").text == question_for(["deduction"])   # 2번째
+
+    judged = bot.send("t", "잘 모르겠어요")                                  # 더 묻지 않고 판정
+    assert not judged.waiting and judged.eligibility
+    assert fake.judged[0].earners[0].deduction is WorkDeduction.GENERAL
+    assert ASSUMPTION_NOTES["deduction"] in judged.text
+    assert ASSUMPTION_NOTES["deduction"] in fake.answered[0][1]              # Claude 에게도 가정했다고 알림
+
+
+def test_gives_up_when_required_condition_never_answered():
+    """가정할 수 없는 조건(가구원 수)은 MAX_ASKS 번 물어도 모르면 판정을 멈추고 안내 — 되묻기에 갇히지 않는다."""
+    fake = Fake([u("eligibility", **{k: v for k, v in WORKER.items() if k != "size"}, deduction="일반"),
+                 u("eligibility"), u("eligibility"), u("info", query="해산급여")])
+    bot = fake.bot()
+    assert bot.send("t", "받을 수 있나요?").waiting
+    assert bot.send("t", "글쎄요").waiting
+
+    stop = bot.send("t", "잘 모르겠어요")
+    assert not stop.waiting and stop.text == give_up_message(["size"])
+    assert fake.judged == []
+
+    after = bot.send("t", "아이 낳으면 받는 급여는?")  # 다음 질문은 새 질문으로
+    assert not after.waiting and fake.searched == ["해산급여"]
+
+
+def test_new_question_while_asking_escapes():
+    """되묻는 중에 답 대신 다른 질문을 하면(new_question) 되묻기를 그만두고 그 질문에 답한다."""
+    fake = Fake([u("eligibility", size=1), u("info", query="해산급여", new_question=True)])
+    bot = fake.bot()
+    assert bot.send("t", "혼자 사는데 받을 수 있나요?").waiting
+
+    reply = bot.send("t", "그런데 아이 낳으면 받는 급여는 뭐예요?")
+    assert not reply.waiting
+    assert fake.searched == ["해산급여"]
+    assert fake.answered[-1][0] == "그런데 아이 낳으면 받는 급여는 뭐예요?"
+    assert bot.graph.get_state({"configurable": {"thread_id": "t"}}).values["household"]["size"] == 1  # 모은 조건은 남음

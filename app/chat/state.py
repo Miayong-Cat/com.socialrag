@@ -62,6 +62,14 @@ REQUIRED: dict[str, str] = {
 }
 
 
+# 같은 조건을 이만큼 물어도 답을 못 들으면 더 묻지 않는다 — "모르겠어요"에 같은 질문을 끝없이 반복하지 않게
+MAX_ASKS = 2
+# 답을 못 들었을 때 가정하고 판정해도 되는 조건 → 가정값 (공제가 가장 작은 쪽 = 신청자에게 불리한 쪽으로 가정)
+#   나머지 조건(가구원 수·지역·소득·재산)은 가정하면 판정이 의미 없으므로 판정을 멈추고 안내한다
+ASSUMABLE = {"deduction": "일반"}
+FIELD_LABELS = {"size": "가구원 수", "region": "사는 지역", "income": "근로·사업소득", "deduction": "공제 유형", "assets": "재산"}
+
+
 def missing_fields(info: HouseholdInfo) -> list[str]:
     """아직 모르는 필수 조건 이름 목록 (REQUIRED 순서)."""
     missing = []
@@ -100,7 +108,7 @@ def to_household(info: HouseholdInfo) -> Household:
     """
     earners = []
     if info.earned_income:
-        earners = [Earner(info.earned_income, WorkDeduction(info.deduction or "일반"))]
+        earners = [Earner(info.earned_income, WorkDeduction(info.deduction or ASSUMABLE["deduction"]))]
     return Household(
         size=info.size,
         region=Region(info.region),
@@ -125,6 +133,8 @@ class ChatState(TypedDict, total=False):
     search_query: str           # 지침서 검색용으로 바꿔 쓴 질문
     household: dict             # 모은 가구 조건 (HouseholdInfo.model_dump())
     pending_fields: list[str]   # 아직 모르는 필수 조건 — 비어 있지 않으면 되묻는 중
+    ask_counts: dict            # {조건: 이번 질문에서 물어본 횟수} — MAX_ASKS 를 넘기면 더 묻지 않음
+    assumed: list[str]          # 답을 못 들어 가정하고 판정한 조건 (ASSUMABLE) — 답변에 "가정함" 표시
     eligibility: list[dict]     # 판정 결과 (app/schemas.py 의 ProgramJudgement)
     passages: list[dict]        # 검색한 지침서 청크 {page, section, heading, text}
     crisis: str                 # 이번 메시지의 위기 신호 종류 ("" = 없음) — app/chat/crisis.py

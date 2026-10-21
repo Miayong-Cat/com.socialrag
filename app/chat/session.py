@@ -70,7 +70,7 @@ class Chatbot:
             # 앞 턴이 중간에 실패해 남은 노드가 있어도 여기서 처음(START)부터 새로 시작한다
             graph_input = {
                 "messages": [{"role": "user", "content": message}],
-                "eligibility": [], "passages": [], "sources": [], "pending_fields": [],
+                "eligibility": [], "passages": [], "sources": [], "pending_fields": [], "ask_counts": {}, "assumed": [],
             }
 
         # custom = 노드가 get_stream_writer() 로 보낸 글 조각, values = 노드가 끝날 때마다의 전체 상태

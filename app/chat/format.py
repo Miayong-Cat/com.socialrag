@@ -12,6 +12,7 @@ Claude 가 쓰는 부분은 "왜 그런지, 다음에 뭘 하면 되는지" 설�
 """
 
 from app.config import GUIDE_TITLE
+from app.chat.state import FIELD_LABELS
 from app.eligibility.standards import WORK_DEDUCTION_PAGE
 
 INCOME_RECOGNITION_PAGE = 77   # 소득인정액 = 소득평가액 + 재산의 소득환산액 (지침서 쪽)
@@ -85,10 +86,32 @@ def format_sources(sources: list[dict]) -> str:
     return f"**출처** — {GUIDE_TITLE}\n" + "\n".join(lines)
 
 
-def compose(explanation: str, sources: list[dict], judgements: list[dict] | None) -> str:
-    """최종 답변 = (판정표 + 계산 근거) + 설명 + 출처 + 면책."""
+ASSUMPTION_NOTES = {
+    "deduction": (
+        "※ 일하시는 분의 공제 유형을 확인하지 못해 **일반(30%) 공제로 가정**하고 계산했어요. "
+        "34세 이하·65세 이상·등록장애인·임신 중 등에 해당하면 알려 주세요 — 공제가 커져 결과가 유리해질 수 있어요."
+    ),
+}
+
+
+def format_assumptions(assumed: list[str] | None) -> str:
+    """답을 못 들어 가정하고 판정한 조건 안내 (app/chat/state.py 의 ASSUMABLE)."""
+    return "\n".join(ASSUMPTION_NOTES[f] for f in assumed or [])
+
+
+def give_up_message(fields: list[str]) -> str:
+    """같은 조건을 여러 번 물어도 답을 못 들었을 때 — 판정을 멈추고 무엇이 필요한지 알린다."""
+    names = ", ".join(FIELD_LABELS[f] for f in fields)
+    return (
+        f"{names}을(를) 확인하지 못해 아직 판정할 수 없어요. 알게 되면 언제든 다시 말씀해 주세요 — 바로 이어서 판정해 드릴게요.\n\n"
+        "정확한 확인이 어려우면 주소지 읍·면·동 행정복지센터나 보건복지상담센터(**129**)에서 함께 확인할 수 있어요."
+    )
+
+
+def compose(explanation: str, sources: list[dict], judgements: list[dict] | None, assumed: list[str] | None = None) -> str:
+    """최종 답변 = (판정표 + 계산 근거 + 가정 안내) + 설명 + 출처 + 면책."""
     parts = []
     if judgements:
-        parts += [format_judgements(judgements), format_basis(judgements)]
+        parts += [format_judgements(judgements), format_basis(judgements), format_assumptions(assumed)]
     parts += [explanation, format_sources(sources), DISCLAIMER]
     return "\n\n".join(p for p in parts if p)

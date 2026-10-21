@@ -31,6 +31,8 @@ SYSTEM_PROMPT = """\
   - deduction(근로소득공제 유형)은 일하는 사람에 대해 들은 대로: 34세 이하·대학생 → "60만원 + 30%",
     65세 이상·등록장애인·35세 이상 초중고생 → "20만원 + 30%", 임신 중·출산 6개월 미만·사회복무요원 → "30% 공제",
     장애인 직업재활 참여 → "20만원 + 50%", 물어봤는데 "해당 없어요"·"아니요"이면 → "일반". 들은 적 없으면 null.
+- new_question: [방금 물어본 조건]이 있을 때만 판단합니다. 사용자가 그 질문에 답하지 않고 다른 것을 물으면 true
+  (예: 지역을 물었는데 "그런데 해산급여가 뭐예요?"), 답했거나 "모르겠어요"·"없어요"처럼 답을 못 한 것이면 false.
 - search_query: 지침서에서 근거 문단을 찾기 위한 한 문장. 일상어를 지침서 용어로 바꾸세요.
   예) "일해서 번 돈" → "근로소득", "빼주나요" → "공제", "장례비" → "장제급여", "아이 낳으면" → "해산급여"
 """
@@ -42,6 +44,10 @@ class Understanding(BaseModel):
     intent: Literal["eligibility", "info"]
     household: HouseholdInfo
     search_query: str = Field(description="지침서 검색용 문장 (지침서 용어로)")
+    new_question: bool = Field(
+        False,
+        description="[방금 물어본 조건]이 있는데 사용자가 그 답 대신 다른 질문을 했으면 true. 답을 모른다·없다고 한 것은 false",
+    )
 
 
 def understand(messages: list[dict], known: HouseholdInfo, asked: list[str], client=None) -> Understanding:
