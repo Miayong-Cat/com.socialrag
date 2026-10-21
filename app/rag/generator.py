@@ -11,6 +11,7 @@ Claude API 의 인용(citations) 기능을 쓴다:
 API 키: .env 의 ANTHROPIC_API_KEY (anthropic 라이브러리가 환경변수에서 자동으로 읽음)
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import anthropic
@@ -89,16 +90,19 @@ def generate(
     chunks: list[GuideChunk],
     client: anthropic.Anthropic | None = None,
     facts: str | None = None,
+    on_text: Callable[[str], None] | None = None,
 ) -> Answer:
     """질문 + 근거 청크 → Claude 답변.
 
     facts: 판정 엔진 결과 등 "이미 확정된 사실" 글. 주어지면 질문 앞에 붙여 Claude 가 설명의 출발점으로 쓴다.
+    on_text: 주어지면 스트리밍으로 받으며 글 조각마다 부른다 (화면에 답이 써지는 모습을 보여 주려고).
+             돌려주는 Answer 는 스트리밍이든 아니든 같다.
 
     client 를 넘기지 않으면 새로 만든다 (테스트에서는 가짜 client 를 넘김).
     fallbacks="default": Claude 의 안전 분류기가 요청을 거절하면 서버가 다른 모델로 자동 재시도한다.
     """
     client = client or anthropic.Anthropic()
-    response = client.beta.messages.create(
+    request = dict(
         model=LLM_MODEL,
         max_tokens=16000,
         betas=["server-side-fallback-2026-07-01"],
@@ -117,4 +121,12 @@ def generate(
             }
         ],
     )
+    if on_text is None:
+        response = client.beta.messages.create(**request)
+    else:
+        # 스트리밍: 글자가 생기는 대로 on_text 로 넘긴다. 인용·쪽번호는 다 받은 뒤 최종 응답으로 붙인다
+        with client.beta.messages.stream(**request) as stream:
+            for text in stream.text_stream:
+                on_text(text)
+            response = stream.get_final_message()
     return parse_response(response, chunks)

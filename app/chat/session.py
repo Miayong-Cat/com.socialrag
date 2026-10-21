@@ -9,7 +9,7 @@
 """
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 
 from langgraph.types import Command
@@ -44,14 +44,34 @@ class Chatbot:
 
     def send(self, thread_id: str, message: str) -> Reply:
         """사용자 메시지 하나 → 챗봇의 답."""
+        *_, reply = self.stream(thread_id, message)  # 마지막 항목이 Reply
+        return reply
+
+    def stream(self, thread_id: str, message: str) -> Iterator[str | Reply]:
+        """send 의 스트리밍판 — 답이 써지는 대로 글 조각(str)을 내보내고, 맨 끝에 완성된 Reply 를 하나 내보낸다.
+
+        글 조각은 미리 보기용이다. 화면은 마지막 Reply.text(출처·면책 안내·[p.쪽] 표시까지 붙은 답)로 바꿔 보여 준다.
+        되묻기·자살 신호 안내처럼 Claude 가 쓰지 않는 답은 글 조각 없이 Reply 만 나온다.
+        """
         started = time.perf_counter()
         config = {"configurable": {"thread_id": thread_id}}
         if self.graph.get_state(config).next:  # 멈춰 있는 노드가 있음 = 되묻는 중
-            result = self.graph.invoke(Command(resume=message), config)
+            graph_input = Command(resume=message)
         else:
             # 새 질문. 이전 턴의 검색·판정 결과는 지워서 섞이지 않게 한다 (가구 조건은 남김)
-            fresh = {"messages": [{"role": "user", "content": message}], "eligibility": [], "passages": [], "sources": []}
-            result = self.graph.invoke(fresh, config)
+            graph_input = {"messages": [{"role": "user", "content": message}], "eligibility": [], "passages": [], "sources": []}
+
+        # custom = 노드가 get_stream_writer() 로 보낸 글 조각, values = 노드가 끝날 때마다의 전체 상태
+        result, interrupts = {}, None
+        for mode, data in self.graph.stream(graph_input, config, stream_mode=["custom", "values"]):
+            if mode == "custom":
+                yield data
+            elif "__interrupt__" in data:  # 그래프가 질문을 남기고 멈춤 (invoke 결과의 __interrupt__ 와 같음)
+                interrupts = data["__interrupt__"]
+            else:
+                result = data
+        if interrupts:
+            result = result | {"__interrupt__": interrupts}
 
         reply = self._to_reply(result)
         self.log(
@@ -65,7 +85,7 @@ class Chatbot:
             missing_fields_count=len(result.get("pending_fields") or []) if reply.waiting else 0,
             eligibility_result={r["program"]: r["eligible"] for r in reply.eligibility} or None,
         )
-        return reply
+        yield reply
 
     @staticmethod
     def _to_reply(result: dict) -> Reply:

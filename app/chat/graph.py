@@ -26,6 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
@@ -44,7 +45,7 @@ class Deps:
     understand: Callable[[list[dict], HouseholdInfo, list[str]], Understanding]  # 대화 → 의도·조건·검색어
     search: Callable[[str], list[dict]]                                         # 검색어 → 청크 목록
     judge: Callable[[Household], list[dict]]                                    # 가구 → 제도별 판정 결과
-    answer: Callable[[str, list[dict], str | None], Answer]                     # 질문·청크·판정 요약 → 답변
+    answer: Callable[..., Answer]  # (질문, 청크, 판정 요약, on_text=글 조각 콜백) → 답변
 
 
 def build_graph(deps: Deps, checkpointer=None):
@@ -116,10 +117,17 @@ def build_graph(deps: Deps, checkpointer=None):
         """근거 청크(+ 판정 결과)로 답변을 만든다.
 
         판정표·계산 근거·출처·면책 안내는 코드가 만들어 붙이고(app/chat/format.py), Claude 는 설명만 쓴다.
+
+        스트리밍(Chatbot.stream): 위기 안내·판정표를 먼저 보내고, Claude 의 설명은 써지는 대로 보낸다.
+        get_stream_writer() 는 stream_mode="custom" 으로 실행할 때만 실제로 보내고, invoke 일 때는 아무것도 안 한다.
         """
+        write = get_stream_writer()
         judgements = state["eligibility"] if state["intent"] == "eligibility" else None
         facts = f"{format_judgements(judgements)}\n{format_basis(judgements)}" if judgements else None
-        result = deps.answer(state["question"], state["passages"], facts)
+        head = [p for p in (state.get("notice"), judgements and format_judgements(judgements), judgements and format_basis(judgements)) if p]
+        if head:
+            write("\n\n".join(head) + "\n\n")
+        result = deps.answer(state["question"], state["passages"], facts, on_text=write)
         sources = [{"page": s.page, "section": s.section, "quote": s.quote} for s in result.sources]
         reply = compose(result.text, sources, judgements)
         return {"answer": reply, "sources": sources, "messages": [{"role": "assistant", "content": reply}]}
@@ -166,8 +174,8 @@ def default_deps() -> Deps:
         with SessionLocal() as db:
             return [r.model_dump() for r in eligibility.judge(db, household, YEAR)]
 
-    def answer(question: str, passages: list[dict], facts: str | None) -> Answer:
+    def answer(question: str, passages: list[dict], facts: str | None, on_text=None) -> Answer:
         # 상태에는 DB 객체 대신 dict 를 저장하므로, generator 가 읽는 모양(GuideChunk)으로 되돌린다
-        return generate(question, [GuideChunk(**p) for p in passages], facts=facts)
+        return generate(question, [GuideChunk(**p) for p in passages], facts=facts, on_text=on_text)
 
     return Deps(understand=understand, search=search_passages, judge=judge, answer=answer)

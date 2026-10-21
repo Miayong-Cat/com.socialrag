@@ -96,3 +96,30 @@ def test_facts_are_given_before_question():
     assert [b["type"] for b in content] == ["document", "document", "text", "text"]
     assert content[2]["text"] == "[판정 엔진 결과]\n| 생계급여 | ✅ 충족 |"
     assert content[3]["text"] == "받을 수 있나요?"
+
+
+def test_streaming_passes_pieces_and_returns_same_answer():
+    """on_text 를 주면 stream 으로 받아 조각마다 부르고, 결과는 create 와 같은 Answer (인용 포함)."""
+    response = NS(stop_reason="end_turn", content=[text_block("30% 공제합니다.", [citation(0, "30% 공제 적용")])])
+
+    class FakeStream:
+        text_stream = ["30% ", "공제합니다."]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get_final_message(self):
+            return response
+
+    client = FakeClient(response)
+    client.beta.messages.stream = lambda **kwargs: FakeStream()
+    pieces = []
+
+    answer = generate("공제는?", CHUNKS, client=client, on_text=pieces.append)
+
+    assert pieces == ["30% ", "공제합니다."]
+    assert answer.text == "30% 공제합니다. [p.131]"
+    assert client.request is None  # create 는 부르지 않음

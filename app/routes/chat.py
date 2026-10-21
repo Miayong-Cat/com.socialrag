@@ -1,24 +1,33 @@
 """챗봇 API — 메시지를 보내면 챗봇이 답한다. 조건이 부족하면 되묻는다.
 
-| 메서드 | 경로       | 하는 일          | 성공 코드 |
-|--------|------------|------------------|-----------|
-| POST   | /api/chat  | 메시지 보내기    | 200       |
+| 메서드 | 경로             | 하는 일                               | 성공 코드 |
+|--------|------------------|---------------------------------------|-----------|
+| POST   | /api/chat        | 메시지 보내기                         | 200       |
+| POST   | /api/chat/stream | 메시지 보내기 (답을 써지는 대로 받기) | 200       |
 
 대화 이어 가기:
     첫 요청은 thread_id 없이 보낸다 → 응답의 thread_id 를 다음 요청에 그대로 넣는다.
     같은 thread_id 면 앞에서 말한 가구 조건이 이어지고, 되묻는 중(waiting=true)이면 메시지가 그 답이 된다.
 
+스트리밍 (/api/chat/stream): 한 줄에 JSON 하나씩(NDJSON) 보낸다.
+    {"type": "delta", "text": "…"}        답의 글 조각 (미리 보기용, 여러 번)
+    {"type": "done", ...ChatResponse}     완성된 답 (마지막에 한 번) — 화면은 이걸로 바꿔 보여 준다
+    {"type": "error", "message": "…"}     실패 (응답 코드는 이미 200 으로 나갔으므로 줄로 알린다)
+
 주의: 대화 상태는 서버 메모리에 있다 (InMemorySaver). 서버를 다시 켜면 대화가 사라진다.
 """
 
+import json
 import uuid
+from collections.abc import Iterator
 from functools import lru_cache
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.chat.session import Chatbot
+from app.chat.session import Chatbot, Reply
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -46,16 +55,11 @@ def get_chatbot() -> Chatbot:
     return Chatbot()
 
 
-@router.post("", response_model=ChatResponse)
-def chat(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
-    """메시지 하나를 처리해 챗봇의 답을 돌려준다."""
-    thread_id = request.thread_id or uuid.uuid4().hex
-    try:
-        reply = bot.send(thread_id, request.message)
-    except anthropic.AuthenticationError as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Claude API 키가 없거나 잘못됐습니다 (.env 의 ANTHROPIC_API_KEY)") from e
-    except LookupError as e:  # 기준 중위소득 미적재 등 (app/services/eligibility.py)
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from e
+KEY_ERROR = "Claude API 키가 없거나 잘못됐습니다 (.env 의 ANTHROPIC_API_KEY)"
+
+
+
+def to_response(thread_id: str, reply: Reply) -> ChatResponse:
     return ChatResponse(
         thread_id=thread_id,
         reply=reply.text,
@@ -63,3 +67,39 @@ def chat(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
         eligibility=reply.eligibility,
         sources=reply.sources,
     )
+
+
+@router.post("", response_model=ChatResponse)
+def chat(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
+    """메시지 하나를 처리해 챗봇의 답을 돌려준다."""
+    thread_id = request.thread_id or uuid.uuid4().hex
+    try:
+        reply = bot.send(thread_id, request.message)
+    except anthropic.AuthenticationError as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, KEY_ERROR) from e
+    except LookupError as e:  # 기준 중위소득 미적재 등 (app/services/eligibility.py)
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from e
+    return to_response(thread_id, reply)
+
+
+@router.post("/stream")
+def chat_stream(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
+    """메시지 하나를 처리하며 답을 써지는 대로 보낸다 (NDJSON — 맨 위 설명 참고)."""
+    thread_id = request.thread_id or uuid.uuid4().hex
+
+    def line(event: dict) -> str:
+        return json.dumps(event, ensure_ascii=False) + "\n"
+
+    def events() -> Iterator[str]:
+        try:
+            for item in bot.stream(thread_id, request.message):
+                if isinstance(item, Reply):
+                    yield line({"type": "done"} | to_response(thread_id, item).model_dump())
+                else:
+                    yield line({"type": "delta", "text": item})
+        except anthropic.AuthenticationError:
+            yield line({"type": "error", "message": KEY_ERROR})
+        except LookupError as e:
+            yield line({"type": "error", "message": str(e)})
+
+    return StreamingResponse(events(), media_type="application/x-ndjson")

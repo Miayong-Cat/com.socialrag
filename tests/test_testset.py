@@ -73,7 +73,7 @@ def test_chat_mode_scoring():
         understand=lambda messages, known, asked: understood[messages[-1]["content"]],
         search=lambda query: [{"page": 131, "section": "Ⅲ. 소득조사", "heading": "", "text": "30% 공제"}],
         judge=judge_without_db,
-        answer=lambda question, passages, facts: Answer(text="설명", sources=[Source(page=131, section="Ⅲ", quote="30%")]),
+        answer=lambda question, passages, facts, on_text=None: Answer(text="설명", sources=[Source(page=131, section="Ⅲ", quote="30%")]),
     )
     rows = {r["id"]: r for r in run_chat(list(items.values()), Chatbot(deps, log=lambda **_: None))}
 

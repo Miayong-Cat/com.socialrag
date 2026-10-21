@@ -7,6 +7,9 @@ UI 는 판정 엔진·챗봇을 직접 import 하지 않고 API 로만 쓴다.
 에러는 ApiError 하나로 바꿔 던진다 (message = 화면에 그대로 보여 줄 한국어 문장).
 """
 
+import json
+from collections.abc import Iterator
+
 import httpx
 
 DEFAULT_URL = "http://127.0.0.1:8000"
@@ -16,6 +19,15 @@ TIMEOUT = 60
 
 class ApiError(Exception):
     """API 호출 실패. str(e) 를 화면에 보여 준다."""
+
+
+def raise_api_error(response: httpx.Response):
+    """4xx·5xx 응답 → ApiError (FastAPI 의 detail 을 메시지로)."""
+    try:
+        detail = response.json().get("detail")
+    except ValueError:
+        detail = response.text
+    raise ApiError(f"[{response.status_code}] {detail}")
 
 
 class ApiClient:
@@ -31,11 +43,7 @@ class ApiClient:
         except httpx.HTTPError as e:
             raise ApiError(f"API 서버에 연결할 수 없습니다 ({self.http.base_url}). `uvicorn app.main:app` 으로 서버를 켜 주세요.") from e
         if response.status_code >= 400:
-            try:
-                detail = response.json().get("detail")
-            except ValueError:
-                detail = response.text
-            raise ApiError(f"[{response.status_code}] {detail}")
+            raise_api_error(response)
         return response.json()
 
     def is_up(self) -> bool:
@@ -48,6 +56,26 @@ class ApiClient:
     def chat(self, message: str, thread_id: str | None = None) -> dict:
         """POST /api/chat → {thread_id, reply, waiting, eligibility, sources}"""
         return self._request("POST", "/api/chat", json={"thread_id": thread_id, "message": message}, timeout=CHAT_TIMEOUT)
+
+    def chat_stream(self, message: str, thread_id: str | None = None) -> Iterator[dict]:
+        """POST /api/chat/stream → {"type": "delta", "text"} 여러 개, 마지막에 {"type": "done", ...chat 과 같은 칸}"""
+        body = {"thread_id": thread_id, "message": message}
+        try:
+            with self.http.stream("POST", "/api/chat/stream", json=body, timeout=CHAT_TIMEOUT) as response:
+                if response.status_code >= 400:
+                    response.read()
+                    raise_api_error(response)
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    event = json.loads(line)
+                    if event["type"] == "error":  # 스트리밍 도중 실패는 줄로 온다 (app/routes/chat.py)
+                        raise ApiError(event["message"])
+                    yield event
+        except httpx.TimeoutException as e:
+            raise ApiError("서버 응답이 너무 늦습니다. 잠시 후 다시 시도해 주세요.") from e
+        except httpx.HTTPError as e:
+            raise ApiError(f"API 서버에 연결할 수 없습니다 ({self.http.base_url}). `uvicorn app.main:app` 으로 서버를 켜 주세요.") from e
 
     def judge(self, household: dict) -> dict:
         """POST /api/eligibility → {year, household_size, results: [...]}"""

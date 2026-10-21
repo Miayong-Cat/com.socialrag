@@ -10,7 +10,7 @@ Claude·DB 대신 가짜 함수를 넣어 "그래프가 어느 길로 가는지"
 from app.chat.crisis import detect
 from app.chat.format import DISCLAIMER, UNCITED_WARNING, format_basis
 from app.chat.graph import Deps
-from app.chat.session import Chatbot
+from app.chat.session import Chatbot, Reply
 from app.chat.state import HouseholdInfo, missing_fields, question_for, to_household
 from app.chat.understand import Understanding
 from app.eligibility.household import Region, WorkDeduction
@@ -39,8 +39,11 @@ class Fake:
         self.judged.append(household)
         return [JUDGEMENT]
 
-    def answer(self, question, passages, facts):
+    def answer(self, question, passages, facts, on_text=None):
         self.answered.append((question, facts))
+        if on_text:  # 가짜 Claude 도 두 조각으로 나눠 "스트리밍"한다
+            on_text("설명")
+            on_text("입니다.")
         return Answer(text="설명입니다.", sources=self.sources)
 
     def log(self, **fields):
@@ -231,3 +234,41 @@ def test_turns_are_logged():
     assert (judged["waiting"], judged["retrieved_doc_count"]) == (False, 1)
     assert judged["eligibility_result"] == {"생계급여": True}
     assert judged["intent"] == "eligibility" and judged["response_time_ms"] >= 0
+
+
+# ── 8단계: 스트리밍 ─────────────────────────────────────────
+
+
+def test_stream_sends_pieces_then_reply():
+    """stream: 판정표를 먼저, Claude 설명은 조각으로, 맨 끝에 send 와 같은 Reply. 되묻기 턴은 Reply 만."""
+    full = dict(region="서울", earned_income=0, housing=0, general=0, financial=0, car_full_rate=0, debt=0)
+    fake = Fake([u("eligibility", **full), u("eligibility", size=1)])
+    bot = fake.bot()
+
+    asking = list(bot.stream("t", "받을 수 있나요?"))
+    assert len(asking) == 1 and isinstance(asking[0], Reply) and asking[0].waiting
+
+    *pieces, reply = bot.stream("t", "1명이요")
+    assert pieces[0].startswith("| 급여 |")              # 판정표가 설명보다 먼저
+    assert pieces[1:] == ["설명", "입니다."]
+    assert isinstance(reply, Reply) and not reply.waiting
+    assert reply.text.startswith(pieces[0].rstrip())     # 완성본도 판정표로 시작
+    assert len(fake.logs) == 2                           # 스트리밍도 턴마다 로그
+
+
+def test_chat_stream_api(client):
+    """API /api/chat/stream: NDJSON 줄 — delta 여러 개, 마지막 done 은 /api/chat 응답과 같은 칸."""
+    import json
+
+    from app.main import app
+    from app.routes.chat import get_chatbot
+
+    bot = Fake([u("info")]).bot()
+    app.dependency_overrides[get_chatbot] = lambda: bot
+
+    response = client.post("/api/chat/stream", json={"message": "근로소득 공제는?"})
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    assert [e["type"] for e in events] == ["delta", "delta", "done"]
+    assert events[-1]["reply"].startswith("설명입니다.") and events[-1]["thread_id"]
+    assert events[-1]["sources"] == [{"page": 131, "section": "Ⅲ. 소득조사", "quote": "30% 공제"}]

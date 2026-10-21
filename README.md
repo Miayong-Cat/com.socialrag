@@ -135,6 +135,18 @@ python -m app.chat.cli            # 터미널 대화 (DB + .env 의 ANTHROPIC_AP
 API는 `POST /api/chat` — 첫 요청은 `{"message": "…"}`, 이후엔 응답의 `thread_id`를 같이 보낸다.
 응답의 `waiting: true`는 조건을 되묻는 중이라는 뜻이고, 다음 메시지가 그 답이 된다.
 
+**스트리밍** `POST /api/chat/stream` — 같은 요청, 응답은 한 줄에 JSON 하나(NDJSON). 웹 화면은 이 경로를 쓴다.
+
+```
+{"type": "delta", "text": "| 급여 | 결과 | …"}   ← 위기 안내·판정표 먼저 (코드가 만듦)
+{"type": "delta", "text": "생계급여는 "}          ← Claude 설명이 써지는 대로
+{"type": "done", "thread_id": "…", "reply": "…", "waiting": false, "eligibility": […], "sources": […]}
+```
+
+- 마지막 `done`의 `reply`가 완성본(출처·`[p.쪽]` 표시·면책 안내 포함) — 화면은 미리 보기를 이걸로 바꿔 끼운다. 인용(citations)은 답을 다 받아야 확정되기 때문
+- 되묻기·자살 신호 안내는 Claude 가 쓰지 않으므로 `delta` 없이 `done` 하나만 온다
+- 그래프 안에서는 LangGraph `get_stream_writer()`(stream_mode `custom`)로 글 조각을 흘려보낸다 — `invoke` 로 돌리면 아무것도 안 보내므로 `/api/chat`·CLI·평가는 그대로
+
 LangGraph 그래프(`app/chat/graph.py`):
 
 ```
