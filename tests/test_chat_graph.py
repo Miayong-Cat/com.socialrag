@@ -357,3 +357,13 @@ def test_crisis_during_asking_ends_the_asking():
     assert not reply.waiting
     assert fake.searched == ["해산급여"]
     assert fake.answered[-1][0] == "아이 낳으면 받는 급여는?"
+
+
+def test_chat_applies_deposit_rate_like_api():
+    """챗봇도 전·월세 보증금을 95%로 넘긴다 — 계산기(판정 API)와 같은 가구면 같은 결과."""
+    from app.schemas import EligibilityRequest
+
+    info = HouseholdInfo(size=1, region="서울", earned_income=0, housing=120_000_000, rented=True)
+    api = EligibilityRequest(size=1, region="서울", housing=120_000_000, rented=True)
+    assert to_household(info).housing == api.to_household().housing == 114_000_000
+    assert to_household(info.model_copy(update={"rented": False})).housing == 120_000_000

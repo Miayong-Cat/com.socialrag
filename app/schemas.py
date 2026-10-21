@@ -17,6 +17,7 @@ Field 조건 읽는 법:
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.config import YEAR
+from app.eligibility.asset import housing_value
 from app.eligibility.household import Earner, Household, Region, WorkDeduction
 
 
@@ -72,7 +73,8 @@ class EligibilityRequest(BaseModel):
     earners: list[EarnerRequest] = Field(default_factory=list)
     other_income: int = Field(default=0, ge=0)          # 그 밖의 월 소득 (재산소득·이전소득 등)
     household_expenses: int = Field(default=0, ge=0)    # 가구특성별 지출비용(월)
-    housing: int = Field(default=0, ge=0)               # 주거용재산 (임차보증금은 95%로 평가한 금액)
+    housing: int = Field(default=0, ge=0)               # 사는 집: 자가면 집값, 전·월세면 보증금 그대로
+    rented: bool = False                                # true = housing 이 전·월세 보증금 → 95%로 평가 (p.164)
     general: int = Field(default=0, ge=0)               # 일반재산
     financial: int = Field(default=0, ge=0)             # 금융재산
     car_full_rate: int = Field(default=0, ge=0)         # 소득환산율 100% 자동차 가액
@@ -86,7 +88,7 @@ class EligibilityRequest(BaseModel):
             earners=[Earner(e.monthly_income, e.deduction) for e in self.earners],
             other_income=self.other_income,
             household_expenses=self.household_expenses,
-            housing=self.housing,
+            housing=housing_value(self.housing, self.rented),
             general=self.general,
             financial=self.financial,
             car_full_rate=self.car_full_rate,

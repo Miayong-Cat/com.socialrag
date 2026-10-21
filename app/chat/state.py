@@ -14,6 +14,7 @@ from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
+from app.eligibility.asset import housing_value
 from app.eligibility.household import Earner, Household, Region, WorkDeduction
 
 RegionName = Literal["서울", "경기", "광역·세종·창원", "그 외 지역"]
@@ -38,6 +39,7 @@ class HouseholdInfo(BaseModel):
     )
     other_income: int | None = Field(None, description="그 밖의 월 소득(원): 연금·임대료·이자·정기 지원금 등")
     housing: int | None = Field(None, description="사는 집 가액(원): 자가면 집값, 전·월세면 보증금")
+    rented: bool | None = Field(None, description="사는 집이 전세·월세라 housing 이 보증금이면 true, 자가면 false")
     general: int | None = Field(None, description="사는 집이 아닌 토지·건물 등 일반재산(원)")
     financial: int | None = Field(None, description="예금·적금·주식·보험 등 금융재산(원)")
     car_full_rate: int | None = Field(None, description="자동차 가액(원). 생업용·장애인용이 아닌 일반 승용차")
@@ -95,7 +97,7 @@ def to_household(info: HouseholdInfo) -> Household:
         region=Region(info.region),
         earners=earners,
         other_income=info.other_income or 0,
-        housing=info.housing or 0,
+        housing=housing_value(info.housing or 0, bool(info.rented)),
         general=info.general or 0,
         financial=info.financial or 0,
         car_full_rate=info.car_full_rate or 0,

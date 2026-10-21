@@ -27,6 +27,7 @@ from app.eligibility.household import Household
 from app.eligibility.standards import (
     BASIC_PROPERTY_DEDUCTION,
     CONVERSION_RATE,
+    DEPOSIT_RATE,
     HOUSING_CAP,
     LIVING_RESERVE,
 )
@@ -76,6 +77,14 @@ def asset_conversion(household: Household) -> int:
     converted = sum(apply_rate(amounts[kind], CONVERSION_RATE[kind]) for kind in DEDUCTION_ORDER)
     converted += apply_rate(household.car_full_rate, CONVERSION_RATE["car_full_rate"])
     return int(converted)  # 원 미만 버림
+
+
+def housing_value(amount: int, rented: bool) -> int:
+    """사는 집의 재산 가액(Household.housing 에 넣을 값). 자가면 집값 그대로, 전·월세면 보증금의 95% (p.164).
+
+    챗봇(app/chat/state.py)과 판정 API(app/schemas.py)가 같이 쓴다 — 화면마다 따로 계산하면 결과가 어긋난다.
+    """
+    return int(apply_rate(amount, DEPOSIT_RATE)) if rented else amount  # 원 미만 버림
 
 
 def apply_rate(amount: int, percent: float) -> Decimal:

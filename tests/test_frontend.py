@@ -121,7 +121,7 @@ def test_example_button_sends_question(fake_api):
 
 
 def test_calculator_converts_units(fake_api):
-    """만원 입력 → 원, 전·월세 보증금은 95%, 소득 없으면 earners 비움."""
+    """만원 입력 → 원, 전·월세는 rented 표시만 (95%는 서버), 소득 없으면 earners 비움."""
     at = run(AppTest.from_file(APP))
     at.number_input(key="size").set_value(2)
     at.selectbox(key="region").set_value("경기")
@@ -133,7 +133,7 @@ def test_calculator_converts_units(fake_api):
 
     _, household = next(c for c in fake_api if c[0] == "judge")
     assert household["size"] == 2 and household["region"] == "경기"
-    assert household["housing"] == 47_500_000          # 5천만 × 95%
+    assert household["housing"] == 50_000_000 and household["rented"] is True  # 95% 평가는 서버가 함
     assert household["financial"] == 3_000_000
     assert household["earners"] == []
     assert at.metric[0].value == "충족"

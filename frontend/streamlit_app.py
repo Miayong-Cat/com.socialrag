@@ -31,7 +31,6 @@ DEDUCTIONS = {
     "임신 중 · 출산 6개월 미만 · 사회복무요원 (30%)": "30% 공제",
     "장애인 직업재활 참여 (20만원 + 50%)": "20만원 + 50%",
 }
-DEPOSIT_RATE = 0.95  # 주택 임차보증금은 95%로 평가 (지침서 p.164)
 MAN = 10_000
 EXAMPLES = [
     "혼자 사는데 생계급여 받을 수 있나요?",
@@ -242,7 +241,8 @@ def calculator_tab(api: ApiClient):
         "region": region,
         "earners": [{"monthly_income": earned, "deduction": DEDUCTIONS[deduction]}] if earned else [],
         "other_income": other,
-        "housing": int(housing * DEPOSIT_RATE) if rented else housing,
+        "housing": housing,
+        "rented": rented,  # 95% 평가는 서버(판정 엔진)가 한다 — 챗봇과 같은 규칙
         "general": general,
         "financial": financial,
         "car_full_rate": car,

@@ -121,3 +121,17 @@ def test_no_median_income_for_year(client, loaded):
 def test_validation_error(client, loaded, body):
     """형식에 안 맞는 입력은 Pydantic 검증(app/schemas.py)에서 막혀 422."""
     assert client.post("/api/eligibility", json=body).status_code == 422
+
+
+def test_rented_deposit_is_95_percent(client, loaded):
+    """전·월세 보증금은 95%로 평가 (p.164) — 서버가 한다 (챗봇·계산기 같은 규칙).
+
+    서울 1인, 소득 없음, 보증금 1억2천만원:
+        전·월세: 1억1,400만 − 기본재산액 9,900만 = 1,500만 × 1.04% = 156,000
+        자가:    1억2,000만 − 9,900만           = 2,100만 × 1.04% = 218,400
+    """
+    body = {"size": 1, "region": "서울", "housing": 120_000_000}
+    rented = by_program(client.post("/api/eligibility", json=body | {"rented": True}))
+    owned = by_program(client.post("/api/eligibility", json=body))
+    assert rented["생계급여"]["asset_conversion"] == 156_000
+    assert owned["생계급여"]["asset_conversion"] == 218_400

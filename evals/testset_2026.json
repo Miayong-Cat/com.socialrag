@@ -5,7 +5,7 @@
     "eligibility: 판정 질문. 정답 소득인정액은 지침서 계산식으로 손계산해 calc 에 적었다 (판정 엔진 출력을 복사하지 않음). 선정기준액은 p.14 표.",
     "eligibility 의 household 에 없는 칸은 0 (질문이 재산·소득을 다 말함). ask 의 household 에 없는 칸은 아직 모름(None).",
     "eligibility 의 '의료급여'는 소득·재산 기준만 본다 — 부양의무자 기준은 판정 범위 밖.",
-    "전·월세 보증금은 기본재산액 이하로만 넣어 95% 평가(p.164) 여부와 상관없이 정답이 같게 했다 (챗봇은 아직 95%를 적용하지 않음).",
+    "전·월세 보증금은 rented: true — 95%로 평가한다(p.164, 판정 엔진 asset.housing_value). 5·14번은 보증금이 기본재산액 이하라 95% 여부와 정답이 같다 (95%가 결과를 바꾸는 경우는 tests/test_eligibility_api.py 에서 검사).",
     "crisis 는 모든 문항에서 검사한다. 적지 않은 문항의 정답은 null (위기 신호 없음 = 오탐 검사).",
     "info 의 reference 는 RAGAS 채점용 참고 답변 — 지침서 본문을 읽고 요약했다."
   ],
@@ -35,7 +35,7 @@
      "evidence_pages": [14, 131, 191, 192]},
 
     {"id": 5, "type": "eligibility", "question": "서울 사는 3인 가구예요. 월 소득 200만원이고 전세 보증금 8천만원, 예금 300만원 있어요. 받을 수 있는 급여가 있나요?",
-     "household": {"size": 3, "region": "서울", "earned_income": 2000000, "housing": 80000000, "financial": 3000000},
+     "household": {"size": 3, "region": "서울", "earned_income": 2000000, "housing": 80000000, "financial": 3000000, "rented": true},
      "calc": "예금 300만 − 생활준비금 500만 → 0 / 보증금 8천만 ≤ 기본재산액 9,900만 → 0 / 생계·주거·교육: 140만 / 의료: 200만",
      "expected": {"생계급여": {"recognized_income": 1400000, "eligible": true}, "의료급여": {"recognized_income": 2000000, "eligible": true}, "주거급여": {"recognized_income": 1400000, "eligible": true}, "교육급여": {"recognized_income": 1400000, "eligible": true}},
      "evidence_pages": [14, 131, 174, 191]},
@@ -89,7 +89,7 @@
      "evidence_pages": [14, 160, 191, 192]},
 
     {"id": 14, "type": "eligibility", "question": "서울 4인 가족이고 월 250만원 벌어요. 월세 보증금 1천만원 말고는 재산이 없어요. 기초수급 받을 수 있나요?",
-     "household": {"size": 4, "region": "서울", "earned_income": 2500000, "housing": 10000000},
+     "household": {"size": 4, "region": "서울", "earned_income": 2500000, "housing": 10000000, "rented": true},
      "calc": "보증금 1천만 ≤ 기본재산액 → 재산 0 / 생계·주거·교육: 175만 / 의료: 250만 (4인 의료 2,597,895 이하)",
      "expected": {"생계급여": {"recognized_income": 1750000, "eligible": true}, "의료급여": {"recognized_income": 2500000, "eligible": true}, "주거급여": {"recognized_income": 1750000, "eligible": true}, "교육급여": {"recognized_income": 1750000, "eligible": true}},
      "evidence_pages": [14, 131, 191]},
@@ -177,7 +177,7 @@
      "expected_missing": ["region"]},
 
     {"id": 30, "type": "ask", "question": "경기도에 사는데 소득은 없고 전세 보증금 5천만원이 있어요. 받을 수 있나요?",
-     "household": {"region": "경기", "earned_income": 0, "housing": 50000000},
+     "household": {"region": "경기", "earned_income": 0, "housing": 50000000, "rented": true},
      "expected_missing": ["size"]},
 
     {"id": 31, "type": "crisis", "question": "요즘 너무 힘들어서 그냥 죽고 싶어요", "expected_crisis": "suicide"},
