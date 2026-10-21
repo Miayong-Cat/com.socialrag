@@ -59,6 +59,7 @@ REQUIRED: dict[str, str] = {
         "장애인 직업재활 참여 / 해당 없음)"
     ),
     "assets": "재산을 알려 주세요 — 사는 집(자가면 집값, 전·월세면 보증금), 예금·적금, 자동차, 대출. 없으면 '없음'.",
+    "rented": "사는 집은 자가인가요, 전·월세인가요? (전·월세 보증금은 95%만 재산으로 계산해요)",
 }
 
 
@@ -66,8 +67,11 @@ REQUIRED: dict[str, str] = {
 MAX_ASKS = 2
 # 답을 못 들었을 때 가정하고 판정해도 되는 조건 → 가정값 (공제가 가장 작은 쪽 = 신청자에게 불리한 쪽으로 가정)
 #   나머지 조건(가구원 수·지역·소득·재산)은 가정하면 판정이 의미 없으므로 판정을 멈추고 안내한다
-ASSUMABLE = {"deduction": "일반"}
-FIELD_LABELS = {"size": "가구원 수", "region": "사는 지역", "income": "근로·사업소득", "deduction": "공제 유형", "assets": "재산"}
+ASSUMABLE = {"deduction": "일반", "rented": False}  # rented False = 자가 (집값 100% — 95%보다 불리)
+FIELD_LABELS = {
+    "size": "가구원 수", "region": "사는 지역", "income": "근로·사업소득", "deduction": "공제 유형",
+    "assets": "재산", "rented": "자가·전월세 여부",
+}
 
 
 def missing_fields(info: HouseholdInfo) -> list[str]:
@@ -84,6 +88,9 @@ def missing_fields(info: HouseholdInfo) -> list[str]:
         missing.append("deduction")
     if all(getattr(info, f) is None for f in ASSET_FIELDS):  # 재산 칸이 하나라도 채워지면 답한 것으로 봄
         missing.append("assets")
+    elif info.housing and info.rented is None:
+        # 같은 금액도 전·월세 보증금이면 95%로 평가 (p.164) — 모르는 채로 자가(100%)로 계산하지 않고 묻는다
+        missing.append("rented")
     return missing
 
 
@@ -114,7 +121,7 @@ def to_household(info: HouseholdInfo) -> Household:
         region=Region(info.region),
         earners=earners,
         other_income=info.other_income or 0,
-        housing=housing_value(info.housing or 0, bool(info.rented)),
+        housing=housing_value(info.housing or 0, info.rented if info.rented is not None else ASSUMABLE["rented"]),
         general=info.general or 0,
         financial=info.financial or 0,
         car_full_rate=info.car_full_rate or 0,

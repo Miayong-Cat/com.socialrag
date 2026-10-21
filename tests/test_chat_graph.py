@@ -448,3 +448,21 @@ def test_failed_turn_is_logged_and_stream_reports_error(client):
     app.dependency_overrides[get_chatbot] = lambda: bot
     events = [json.loads(line) for line in client.post("/api/chat/stream", json={"message": "질문"}).text.splitlines()]
     assert events[-1]["type"] == "error" and "알 수 없는 오류" in events[-1]["message"]
+
+
+def test_asks_rented_when_home_value_given():
+    """집 가액만 듣고 자가·전월세를 모르면 묻는다 — 전세라고 하면 95%로, 끝내 모르면 자가로 가정 + 안내."""
+    home = dict(WORKER, earned_income=0, housing=120_000_000)
+    fake = Fake([u("eligibility", **home), u("eligibility", rented=True)])
+    bot = fake.bot()
+    assert bot.send("t", "서울 혼자, 소득 없고 1억2천 집에 살아요").text == question_for(["rented"])
+    assert not bot.send("t", "전세예요").waiting
+    assert fake.judged[0].housing == 114_000_000                       # 보증금 95%
+
+    fake = Fake([u("eligibility", **home), u("eligibility"), u("eligibility")])
+    bot = fake.bot()
+    bot.send("t", "서울 혼자, 소득 없고 1억2천 집에 살아요")
+    bot.send("t", "글쎄요")
+    judged = bot.send("t", "모르겠어요")
+    assert fake.judged[0].housing == 120_000_000                       # 자가로 가정 (100%)
+    assert ASSUMPTION_NOTES["rented"] in judged.text

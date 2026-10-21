@@ -6,6 +6,7 @@
     "eligibility 의 household 에 없는 칸은 0 (질문이 재산·소득을 다 말함). ask 의 household 에 없는 칸은 아직 모름(None).",
     "eligibility 의 '의료급여'는 소득·재산 기준만 본다 — 부양의무자 기준은 판정 범위 밖.",
     "전·월세 보증금은 rented: true — 95%로 평가한다(p.164, 판정 엔진 asset.housing_value). 5·14번은 보증금이 기본재산액 이하라 95% 여부와 정답이 같다 (95%가 결과를 바꾸는 경우는 tests/test_eligibility_api.py 에서 검사).",
+    "사는 집 가액이 있으면 자가인지 전·월세인지도 되묻는다 — 자가 문항은 rented: false (질문의 '○억짜리 집'을 자가로 알아듣는지 chat 모드에서 확인).",
     "근로소득이 있으면 공제 유형을 되묻는다 — 판정 문항은 질문에 '해당 사항 없음'을 넣어 deduction: 일반 (기본값으로 짐작하지 않음).",
     "crisis 는 모든 문항에서 검사한다. 적지 않은 문항의 정답은 null (위기 신호 없음 = 오탐 검사).",
     "info 의 reference 는 RAGAS 채점용 참고 답변 — 지침서 본문을 읽고 요약했다."
@@ -30,7 +31,7 @@
      "evidence_pages": [14, 131]},
 
     {"id": 4, "type": "eligibility", "question": "부산에서 아내랑 둘이 살아요. 제가 월 150만원 벌고, 1억짜리 집이 하나 있어요. 다른 재산은 없어요. 수급 대상이 될까요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 2, "region": "광역·세종·창원", "earned_income": 1500000, "housing": 100000000, "deduction": "일반"},
+     "household": {"size": 2, "region": "광역·세종·창원", "earned_income": 1500000, "housing": 100000000, "deduction": "일반", "rented": false},
      "calc": "재산: (1억 − 기본재산액 7,700만) × 1.04% = 239,200 / 생계·주거·교육: 105만 + 239,200 = 1,289,200 / 의료: 150만 + 239,200 = 1,739,200",
      "expected": {"생계급여": {"recognized_income": 1289200, "eligible": true}, "의료급여": {"recognized_income": 1739200, "eligible": false}, "주거급여": {"recognized_income": 1289200, "eligible": true}, "교육급여": {"recognized_income": 1289200, "eligible": true}},
      "evidence_pages": [14, 131, 191, 192]},
@@ -42,7 +43,7 @@
      "evidence_pages": [14, 131, 174, 191]},
 
     {"id": 6, "type": "eligibility", "question": "경기도 4인 가족이에요. 월 300만원 벌고, 2억짜리 집에 대출이 5천만원 있고, 예금이 1천만원 있어요. 기초수급 될까요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 4, "region": "경기", "earned_income": 3000000, "housing": 200000000, "financial": 10000000, "debt": 50000000, "deduction": "일반"},
+     "household": {"size": 4, "region": "경기", "earned_income": 3000000, "housing": 200000000, "financial": 10000000, "debt": 50000000, "deduction": "일반", "rented": false},
      "calc": "주거용 한도 1억5,100만 초과 4,900만 → 일반재산 / 금융 1천만 − 500만 = 500만 / 기본재산액 8천만·부채 5천만을 주거용에서 → 주거용 2,100만 / 2,100만×1.04% + 4,900만×4.17% + 500만×6.26% = 218,400 + 2,043,300 + 313,000 = 2,574,700 / 생계·주거·교육: 210만 + 2,574,700 = 4,674,700 / 의료: 5,574,700",
      "expected": {"생계급여": {"recognized_income": 4674700, "eligible": false}, "의료급여": {"recognized_income": 5574700, "eligible": false}, "주거급여": {"recognized_income": 4674700, "eligible": false}, "교육급여": {"recognized_income": 4674700, "eligible": false}},
      "evidence_pages": [14, 160, 174, 189, 191, 192]},
@@ -54,7 +55,7 @@
      "evidence_pages": [14, 178, 192]},
 
     {"id": 8, "type": "eligibility", "question": "서울 사는 70세 혼자 사는 노인입니다. 경비 일로 월 50만원 벌고 국민연금이 월 30만원 나와요. 1억5천만원짜리 집에 살고 다른 재산은 없어요. 받을 수 있는 급여가 있나요?",
-     "household": {"size": 1, "region": "서울", "earned_income": 500000, "deduction": "20만원 + 30%", "other_income": 300000, "housing": 150000000},
+     "household": {"size": 1, "region": "서울", "earned_income": 500000, "deduction": "20만원 + 30%", "other_income": 300000, "housing": 150000000, "rented": false},
      "calc": "65세 이상 공제: 20만 + (30만 × 30%) = 29만 → 근로 21만 (모든 급여 같음) / 연금 30만은 공제 없음 / 재산 (1.5억 − 9,900만) × 1.04% = 530,400 / 21만 + 30만 + 530,400 = 1,040,400",
      "expected": {"생계급여": {"recognized_income": 1040400, "eligible": false}, "의료급여": {"recognized_income": 1040400, "eligible": false}, "주거급여": {"recognized_income": 1040400, "eligible": true}, "교육급여": {"recognized_income": 1040400, "eligible": true}},
      "evidence_pages": [14, 131, 191, 192]},
@@ -66,7 +67,7 @@
      "evidence_pages": [14, 131]},
 
     {"id": 10, "type": "eligibility", "question": "인천 5인 가구인데 월 350만원 벌어요. 1억2천만원짜리 집이 있고 예금이 2천만원이에요. 교육급여라도 받을 수 있을까요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 5, "region": "광역·세종·창원", "earned_income": 3500000, "housing": 120000000, "financial": 20000000, "deduction": "일반"},
+     "household": {"size": 5, "region": "광역·세종·창원", "earned_income": 3500000, "housing": 120000000, "financial": 20000000, "deduction": "일반", "rented": false},
      "calc": "주거용 (1.2억 − 7,700만) × 1.04% = 447,200 / 금융 (2천만 − 500만) × 6.26% = 939,000 / 재산 1,386,200 / 생계·주거·교육: 245만 + 1,386,200 = 3,836,200 (교육 3,778,360 초과) / 의료: 4,886,200",
      "expected": {"생계급여": {"recognized_income": 3836200, "eligible": false}, "의료급여": {"recognized_income": 4886200, "eligible": false}, "주거급여": {"recognized_income": 3836200, "eligible": false}, "교육급여": {"recognized_income": 3836200, "eligible": false}},
      "evidence_pages": [14, 174, 191, 192]},
@@ -84,7 +85,7 @@
      "evidence_pages": [13, 14]},
 
     {"id": 13, "type": "eligibility", "question": "청주에서 3명이 살아요. 월 250만원 벌고 1억5천만원짜리 집이 있어요. 다른 재산은 없어요. 주거급여 받을 수 있나요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 3, "region": "그 외 지역", "earned_income": 2500000, "housing": 150000000, "deduction": "일반"},
+     "household": {"size": 3, "region": "그 외 지역", "earned_income": 2500000, "housing": 150000000, "deduction": "일반", "rented": false},
      "calc": "주거용 한도 1억1,200만 초과 3,800만 → 일반재산 / 주거용 (1억1,200만 − 5,300만) × 1.04% = 613,600 / 일반 3,800만 × 4.17% = 1,584,600 / 재산 2,198,200 / 생계·주거·교육: 175만 + 2,198,200 = 3,948,200 / 의료: 4,698,200",
      "expected": {"생계급여": {"recognized_income": 3948200, "eligible": false}, "의료급여": {"recognized_income": 4698200, "eligible": false}, "주거급여": {"recognized_income": 3948200, "eligible": false}, "교육급여": {"recognized_income": 3948200, "eligible": false}},
      "evidence_pages": [14, 160, 191, 192]},
@@ -108,7 +109,7 @@
      "evidence_pages": [14, 174, 191, 192]},
 
     {"id": 17, "type": "eligibility", "question": "세종시에 혼자 사는데 소득은 없어요. 1억6,600만원짜리 집에 살고 땅이 3천만원어치 있어요. 수급 받을 수 있을까요?",
-     "household": {"size": 1, "region": "광역·세종·창원", "earned_income": 0, "housing": 166000000, "general": 30000000},
+     "household": {"size": 1, "region": "광역·세종·창원", "earned_income": 0, "housing": 166000000, "general": 30000000, "rented": false},
      "calc": "지침서 p.191 예시1 그대로: 한도 1억4,600만 초과 2천만 → 일반재산 5천만 / 주거용 (1억4,600만 − 7,700만) × 1.04% = 717,600 / 일반 5천만 × 4.17% = 2,085,000 / 합계 2,802,600",
      "expected": {"생계급여": {"recognized_income": 2802600, "eligible": false}, "의료급여": {"recognized_income": 2802600, "eligible": false}, "주거급여": {"recognized_income": 2802600, "eligible": false}, "교육급여": {"recognized_income": 2802600, "eligible": false}},
      "evidence_pages": [14, 160, 191]},
@@ -126,31 +127,31 @@
      "evidence_pages": [14, 131]},
 
     {"id": 20, "type": "eligibility", "question": "서울에서 둘이 살아요. 저는 등록장애인이고 월 80만원 벌어요. 1억5천만원짜리 집 말고 재산은 없어요. 수급 가능할까요?",
-     "household": {"size": 2, "region": "서울", "earned_income": 800000, "deduction": "20만원 + 30%", "housing": 150000000},
+     "household": {"size": 2, "region": "서울", "earned_income": 800000, "deduction": "20만원 + 30%", "housing": 150000000, "rented": false},
      "calc": "등록장애인 공제: 20만 + (60만 × 30%) = 38만 → 42만 / 재산 (1.5억 − 9,900만) × 1.04% = 530,400 / 950,400 (모든 급여 같음)",
      "expected": {"생계급여": {"recognized_income": 950400, "eligible": true}, "의료급여": {"recognized_income": 950400, "eligible": true}, "주거급여": {"recognized_income": 950400, "eligible": true}, "교육급여": {"recognized_income": 950400, "eligible": true}},
      "evidence_pages": [14, 131, 191, 192]},
 
     {"id": 21, "type": "eligibility", "question": "경기도 6인 가족이에요. 월 400만원 벌고 1억짜리 집과 500만원짜리 승용차가 있어요. 다른 재산은 없어요. 받을 수 있는 급여가 있나요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 6, "region": "경기", "earned_income": 4000000, "housing": 100000000, "car_full_rate": 5000000, "deduction": "일반"},
+     "household": {"size": 6, "region": "경기", "earned_income": 4000000, "housing": 100000000, "car_full_rate": 5000000, "deduction": "일반", "rented": false},
      "calc": "주거용 (1억 − 8천만) × 1.04% = 208,000 / 승용차 500만 × 100% / 재산 5,208,000 / 생계·주거·교육: 280만 + 5,208,000 = 8,008,000 / 의료: 9,208,000",
      "expected": {"생계급여": {"recognized_income": 8008000, "eligible": false}, "의료급여": {"recognized_income": 9208000, "eligible": false}, "주거급여": {"recognized_income": 8008000, "eligible": false}, "교육급여": {"recognized_income": 8008000, "eligible": false}},
      "evidence_pages": [14, 178, 191, 192]},
 
     {"id": 22, "type": "eligibility", "question": "경기도 6인 가족이에요. 월 400만원 벌고 1억짜리 집이 있어요. 차나 예금은 없어요. 받을 수 있는 급여가 있나요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 6, "region": "경기", "earned_income": 4000000, "housing": 100000000, "deduction": "일반"},
+     "household": {"size": 6, "region": "경기", "earned_income": 4000000, "housing": 100000000, "deduction": "일반", "rented": false},
      "calc": "21번에서 차만 뺌 / 생계·주거·교육: 280만 + 208,000 = 3,008,000 (주거 4,106,857 이하) / 의료: 4,208,000",
      "expected": {"생계급여": {"recognized_income": 3008000, "eligible": false}, "의료급여": {"recognized_income": 4208000, "eligible": false}, "주거급여": {"recognized_income": 3008000, "eligible": true}, "교육급여": {"recognized_income": 3008000, "eligible": true}},
      "evidence_pages": [14, 131, 191, 192]},
 
     {"id": 23, "type": "eligibility", "question": "강릉에서 7명이 같이 살아요. 월 450만원 벌고 8천만원짜리 집이 있어요. 다른 재산은 없어요. 주거급여나 교육급여 받을 수 있나요? 일하는 사람은 청년·노인·장애인·임신 같은 해당 사항은 없어요.",
-     "household": {"size": 7, "region": "그 외 지역", "earned_income": 4500000, "housing": 80000000, "deduction": "일반"},
+     "household": {"size": 7, "region": "그 외 지역", "earned_income": 4500000, "housing": 80000000, "deduction": "일반", "rented": false},
      "calc": "주거용 (8천만 − 5,300만) × 1.04% = 280,800 / 생계·주거·교육: 315만 + 280,800 = 3,430,800 / 의료: 4,780,800",
      "expected": {"생계급여": {"recognized_income": 3430800, "eligible": false}, "의료급여": {"recognized_income": 4780800, "eligible": false}, "주거급여": {"recognized_income": 3430800, "eligible": true}, "교육급여": {"recognized_income": 3430800, "eligible": true}},
      "evidence_pages": [14, 131, 191, 192]},
 
     {"id": 24, "type": "eligibility", "question": "울산에서 혼자 살고 소득은 없어요. 1억짜리 집이 있는데 주택담보대출이 3천만원 남아 있어요. 생계급여 받을 수 있나요?",
-     "household": {"size": 1, "region": "광역·세종·창원", "earned_income": 0, "housing": 100000000, "debt": 30000000},
+     "household": {"size": 1, "region": "광역·세종·창원", "earned_income": 0, "housing": 100000000, "debt": 30000000, "rented": false},
      "calc": "주거용 1억 − 기본재산액 7,700만 = 2,300만 − 부채 3천만 → 0 (남는 부채는 버림) / 소득인정액 0",
      "expected": {"생계급여": {"recognized_income": 0, "eligible": true}, "의료급여": {"recognized_income": 0, "eligible": true}, "주거급여": {"recognized_income": 0, "eligible": true}, "교육급여": {"recognized_income": 0, "eligible": true}},
      "evidence_pages": [14, 189, 191]},
