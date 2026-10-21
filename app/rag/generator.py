@@ -11,13 +11,26 @@ Claude API 의 인용(citations) 기능을 쓴다:
 API 키: .env 의 ANTHROPIC_API_KEY (anthropic 라이브러리가 환경변수에서 자동으로 읽음)
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import anthropic
 
 from app.config import LLM_MODEL
-from app.models import GuideChunk
+
+
+class Passage(Protocol):
+    """답변 근거로 넘기는 지침서 문단 — generator 는 이 네 칸만 읽는다.
+
+    DB 모델(app/models 의 GuideChunk)에 묶지 않으려고 "이 칸들이 있으면 된다"로 정했다.
+    GuideChunk(CLI)도, 챗봇 상태의 dict 를 바꾼 가벼운 객체(app/chat/graph.py)도 그대로 넘길 수 있다.
+    """
+
+    page: int           # 지침서 쪽번호
+    section: str        # 장 이름
+    heading: str | None  # 항목 경로 (없으면 None)
+    text: str           # 본문
 
 SYSTEM_PROMPT = """\
 당신은 「국민기초생활보장 사업안내」 지침서를 근거로 복지 담당자와 시민의 질문에 답하는 도우미입니다.
@@ -46,7 +59,7 @@ class Answer:
     sources: list[Source] = field(default_factory=list)
 
 
-def build_documents(chunks: list[GuideChunk]) -> list[dict]:
+def build_documents(chunks: Sequence[Passage]) -> list[dict]:
     """청크 목록 → Claude 에 넘길 문서(document) 블록 목록. 순서가 곧 document_index."""
     return [
         {
@@ -60,7 +73,7 @@ def build_documents(chunks: list[GuideChunk]) -> list[dict]:
     ]
 
 
-def parse_response(response, chunks: list[GuideChunk]) -> Answer:
+def parse_response(response, chunks: Sequence[Passage]) -> Answer:
     """Claude 응답 → Answer. 인용이 달린 문장 뒤에 [p.쪽번호] 를 붙이고, 근거 목록을 모은다.
 
     citations 를 켜면 응답 본문이 여러 text 블록으로 나뉘어 오고,
@@ -87,7 +100,7 @@ def parse_response(response, chunks: list[GuideChunk]) -> Answer:
 
 def generate(
     question: str,
-    chunks: list[GuideChunk],
+    chunks: Sequence[Passage],
     client: anthropic.Anthropic | None = None,
     facts: str | None = None,
     on_text: Callable[[str], None] | None = None,

@@ -25,6 +25,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.config import get_stream_writer
@@ -201,7 +202,6 @@ def default_deps() -> Deps:
     from app.chat.understand import understand
     from app.config import YEAR
     from app.database import SessionLocal
-    from app.models import GuideChunk
     from app.rag.generator import generate
     from app.rag.retriever import search
     from app.services import eligibility
@@ -216,7 +216,7 @@ def default_deps() -> Deps:
             return [r.model_dump() for r in eligibility.judge(db, household, YEAR)]
 
     def answer(question: str, passages: list[dict], facts: str | None, on_text=None) -> Answer:
-        # 상태에는 DB 객체 대신 dict 를 저장하므로, generator 가 읽는 모양(GuideChunk)으로 되돌린다
-        return generate(question, [GuideChunk(**p) for p in passages], facts=facts, on_text=on_text)
+        # 상태에는 dict 를 저장하므로, generator 가 읽는 모양(칸 이름으로 읽는 객체 — generator.Passage)으로 바꾼다
+        return generate(question, [SimpleNamespace(**p) for p in passages], facts=facts, on_text=on_text)
 
     return Deps(understand=understand, search=search_passages, judge=judge, answer=answer)
