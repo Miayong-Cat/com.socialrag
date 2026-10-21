@@ -105,6 +105,12 @@ pytest                            # 메모리 DB를 쓰므로 Docker 없이도 �
 
 **웹 화면 탭** — 상담 챗봇(Claude 필요) · 판정 계산기(판정 API, 만원 단위 입력, 전·월세 보증금 95% 자동 적용) · 지침서 검색(`GET /api/search`). API 서버 주소는 환경변수 `API_URL` (기본 `http://127.0.0.1:8000`)
 
+## 복지제도 API (`/api/welfare`)
+
+조회(GET)는 누구나, 쓰기(POST·PUT·DELETE)는 관리자만 — 헤더 `X-Admin-Token` 이 `.env` 의 `ADMIN_TOKEN` 과 같아야 한다.
+판정 기준(기준 중위소득 대비 %)을 바꾸면 판정 결과가 바로 바뀌기 때문이다. `ADMIN_TOKEN` 이 비어 있으면 쓰기 API 가 꺼진다(403).
+같은 이름·연도의 제도는 하나만 저장된다 (409).
+
 ## 판정 API
 
 `POST /api/eligibility` — 가구 정보를 보내면 DB에 적재된 그 연도의 모든 제도에 대해 판정한다.

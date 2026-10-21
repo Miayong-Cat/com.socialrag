@@ -9,10 +9,19 @@
 | DELETE | /api/welfare/{id}        | 삭제      | 204       |
 
 없는 id를 요청하면 404, 요청 본문이 형식에 안 맞으면 422 (app/schemas.py 검증).
+
+쓰기(등록·수정·삭제)는 관리자만 — 요청 헤더 X-Admin-Token 이 환경변수 ADMIN_TOKEN 과 같아야 한다.
+    판정 기준(max_income_ratio 등)을 바꾸면 판정 결과가 바로 바뀌므로 아무나 바꾸면 안 된다.
+    ADMIN_TOKEN 이 없으면 쓰기 API 를 끈다 (403). 조회는 누구나.
+같은 이름·연도의 제도가 이미 있으면 409 — 판정이 이름으로 제도를 찾으므로 중복되면 결과가 꼬인다.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+import secrets
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlalchemy import select  # SELECT 쿼리를 파이썬 코드로 만드는 함수
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -23,6 +32,25 @@ from app.schemas import WelfareProgramCreate, WelfareProgramResponse
 #   prefix → 아래 모든 경로 앞에 "/api/welfare" 가 붙는다.
 #   tags   → Swagger(/docs) 화면에서 묶어 보여줄 그룹 이름
 router = APIRouter(prefix="/api/welfare", tags=["welfare"])
+
+
+def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+    """쓰기 API 보호. 토큰은 서버 시작 뒤에 바꿔도 반영되도록 요청마다 환경변수에서 읽는다."""
+    expected = os.getenv("ADMIN_TOKEN")
+    if not expected:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "쓰기 API 가 꺼져 있습니다 (서버에 ADMIN_TOKEN 이 설정되지 않음).")
+    # compare_digest: 글자를 앞에서부터 비교하다 멈추지 않아, 응답 시간으로 토큰을 알아낼 수 없게 한다
+    if not x_admin_token or not secrets.compare_digest(x_admin_token, expected):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "관리자 토큰(X-Admin-Token)이 없거나 틀렸습니다.")
+
+
+def commit_or_409(db: Session) -> None:
+    """저장. 같은 이름·연도의 제도가 이미 있으면(unique 제약 위반) 409."""
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, "같은 이름·연도의 복지제도가 이미 있습니다.") from e
 
 
 def find_or_404(db: Session, program_id: int) -> WelfareProgram:
@@ -41,13 +69,13 @@ def find_or_404(db: Session, program_id: int) -> WelfareProgram:
 #   response_model=...                → 반환값을 이 형식으로 변환해 응답 (형식에 없는 칸은 빠짐)
 
 
-@router.post("", response_model=WelfareProgramResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=WelfareProgramResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_admin)])
 def create_program(request: WelfareProgramCreate, db: Session = Depends(get_db)):
     """등록: 요청 본문으로 새 복지제도를 만든다."""
     # model_dump() → 요청 객체를 딕셔너리로 바꿈. ** 로 풀어서 테이블 객체의 칸에 그대로 넣는다.
     program = WelfareProgram(**request.model_dump())
     db.add(program)       # 저장 대기 목록에 올림 (아직 DB엔 안 들어감)
-    db.commit()           # 실제로 DB에 저장
+    commit_or_409(db)     # 실제로 DB에 저장
     db.refresh(program)   # DB가 붙여 준 id 등을 다시 읽어 옴
     return program
 
@@ -65,19 +93,19 @@ def get_program(program_id: int, db: Session = Depends(get_db)):
     return find_or_404(db, program_id)
 
 
-@router.put("/{program_id}", response_model=WelfareProgramResponse)
+@router.put("/{program_id}", response_model=WelfareProgramResponse, dependencies=[Depends(require_admin)])
 def update_program(program_id: int, request: WelfareProgramCreate, db: Session = Depends(get_db)):
     """수정: 기존 복지제도의 모든 칸을 요청 본문 값으로 덮어쓴다. 없으면 404."""
     program = find_or_404(db, program_id)
     # 요청의 칸 이름·값을 하나씩 꺼내 DB 객체에 대입 (program.name = "…", program.category = "…" …)
     for field, value in request.model_dump().items():
         setattr(program, field, value)
-    db.commit()           # 바뀐 내용을 DB에 반영
+    commit_or_409(db)     # 바뀐 내용을 DB에 반영
     db.refresh(program)
     return program
 
 
-@router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)])
 def delete_program(program_id: int, db: Session = Depends(get_db)):
     """삭제: id에 해당하는 복지제도를 지운다. 없으면 404. 성공하면 본문 없이 204."""
     program = find_or_404(db, program_id)

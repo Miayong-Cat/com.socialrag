@@ -7,6 +7,18 @@ client.post / get / put / delete → 실제 HTTP 요청처럼 API를 호출하�
     pytest tests/test_welfare_api.py
 """
 
+import pytest
+
+TOKEN = "test-admin-token"
+
+
+@pytest.fixture(autouse=True)
+def admin(client, monkeypatch):
+    """쓰기 API 는 관리자 토큰이 필요하다 — 이 파일의 테스트는 기본으로 토큰을 켜고 보낸다."""
+    monkeypatch.setenv("ADMIN_TOKEN", TOKEN)
+    client.headers["X-Admin-Token"] = TOKEN
+
+
 # 여러 테스트가 같이 쓰는 요청 본문 예시 (생계급여)
 SAMPLE = {
     "name": "생계급여",
@@ -67,3 +79,28 @@ def test_validation_error(client):
     """비율이 100%를 넘으면 Pydantic 검증(app/schemas.py)에서 막혀 422."""
     response = client.post("/api/welfare", json={**SAMPLE, "max_income_ratio": 150})
     assert response.status_code == 422
+
+
+# ── 쓰기 보호 · 중복 ────────────────────────────────────────
+
+
+def test_write_needs_admin_token(client):
+    """토큰이 없거나 틀리면 401. 조회는 토큰 없이 된다."""
+    del client.headers["X-Admin-Token"]
+    assert client.post("/api/welfare", json=SAMPLE).status_code == 401
+    client.headers["X-Admin-Token"] = "wrong"
+    assert client.post("/api/welfare", json=SAMPLE).status_code == 401
+    assert client.get("/api/welfare").status_code == 200
+
+
+def test_write_disabled_without_server_token(client, monkeypatch):
+    """서버에 ADMIN_TOKEN 이 없으면 쓰기 API 자체가 꺼진다 (403)."""
+    monkeypatch.delenv("ADMIN_TOKEN")
+    assert client.post("/api/welfare", json=SAMPLE).status_code == 403
+
+
+def test_duplicate_name_and_year_is_409(client):
+    """같은 이름·연도는 하나만 — 판정이 이름으로 제도를 찾으므로. 다른 연도는 된다."""
+    assert client.post("/api/welfare", json=SAMPLE).status_code == 201
+    assert client.post("/api/welfare", json=SAMPLE).status_code == 409
+    assert client.post("/api/welfare", json={**SAMPLE, "updated_year": 2027}).status_code == 201

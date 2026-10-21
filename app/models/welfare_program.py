@@ -10,7 +10,7 @@
     - ingestion/load_criteria.py    지침서의 급여 4종을 적재
 """
 
-from sqlalchemy import JSON  # 리스트·딕셔너리를 그대로 저장할 수 있는 컬럼 타입
+from sqlalchemy import JSON, UniqueConstraint  # JSON: 리스트·딕셔너리를 그대로 저장할 수 있는 컬럼 타입
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -25,6 +25,8 @@ class WelfareProgram(Base):
     """
 
     __tablename__ = "welfare_programs"  # DB에 만들어질 실제 테이블 이름
+    # 같은 연도에 같은 이름의 제도는 하나만 — 판정이 {이름: 비율} 로 제도를 찾으므로 중복되면 결과가 꼬인다
+    __table_args__ = (UniqueConstraint("name", "updated_year", name="uq_welfare_programs_name_year"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)  # 자동 증가 번호 (1, 2, 3 …)
     name: Mapped[str]                                # 제도 이름. 예: "생계급여"

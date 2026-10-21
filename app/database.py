@@ -42,14 +42,16 @@ def create_tables() -> None:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
-        for statement in ADDED_COLUMNS:
+        for statement in SCHEMA_UPDATES:
             conn.execute(text(statement))
 
 
-# 이미 만들어진 테이블에 나중에 추가한 칸. create_all 은 "없는 테이블"만 만들고 칸은 추가하지 않으므로 직접 넣는다.
+# 이미 만들어진 테이블에 나중에 추가한 칸·제약. create_all 은 "없는 테이블"만 만들고 기존 테이블은 바꾸지 않으므로 직접 넣는다.
 # (마이그레이션 도구를 쓰기 전까지의 최소한의 방법 — IF NOT EXISTS 라 여러 번 실행해도 안전)
-ADDED_COLUMNS = [
+SCHEMA_UPDATES = [
     "ALTER TABLE ai_search_logs ADD COLUMN IF NOT EXISTS error TEXT",  # 실패한 턴 기록 (app/models/ai_search_log.py)
+    # 같은 이름·연도 제도 중복 금지 (app/models/welfare_program.py 의 UniqueConstraint 와 같은 이름)
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_welfare_programs_name_year ON welfare_programs (name, updated_year)",
 ]
 
 
