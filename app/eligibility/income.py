@@ -17,6 +17,7 @@
 """
 
 from app.eligibility.household import Earner, Household, WorkDeduction
+from app.eligibility.money import rate_floor
 from app.eligibility.standards import GENERAL_DEDUCTION_PROGRAMS, WORK_DEDUCTION_RULES
 
 
@@ -33,7 +34,7 @@ def deduction_by_rule(income: int, base: int, percent: float) -> int:
     """
     if income <= base:
         return income
-    return base + int((income - base) * percent / 100)  # int() → 원 미만 버림
+    return base + rate_floor(income - base, percent)  # 원 미만 버림 (Decimal — app/eligibility/money.py)
 
 
 def work_deduction(earner: Earner, program: str) -> int:

@@ -21,9 +21,8 @@
 원 미만 처리: 지침서 본문에서 규정을 찾지 못해 "원 미만 버림"으로 계산한다 (확인 필요).
 """
 
-from decimal import Decimal  # 소수를 오차 없이 계산하는 숫자 타입 (apply_rate 참고)
-
 from app.eligibility.household import Household
+from app.eligibility.money import apply_rate, rate_floor  # 금액 × % (Decimal — app/eligibility/money.py)
 from app.eligibility.standards import (
     BASIC_PROPERTY_DEDUCTION,
     CONVERSION_RATE,
@@ -84,15 +83,4 @@ def housing_value(amount: int, rented: bool) -> int:
 
     챗봇(app/chat/state.py)과 판정 API(app/schemas.py)가 같이 쓴다 — 화면마다 따로 계산하면 결과가 어긋난다.
     """
-    return int(apply_rate(amount, DEPOSIT_RATE)) if rented else amount  # 원 미만 버림
-
-
-def apply_rate(amount: int, percent: float) -> Decimal:
-    """amount × percent% 를 오차 없이 계산한다.
-
-    Decimal 을 쓰는 이유:
-        1.04 같은 소수는 컴퓨터의 float 로 정확히 표현되지 않아
-        717,600 이어야 할 값이 717,599.9999… 가 될 수 있고, 원 미만을 버리면 1원이 틀어진다.
-        Decimal(str(1.04)) 는 "1.04" 를 글자 그대로 정확한 소수로 다룬다.
-    """
-    return Decimal(amount) * Decimal(str(percent)) / 100
+    return rate_floor(amount, DEPOSIT_RATE) if rented else amount  # 원 미만 버림

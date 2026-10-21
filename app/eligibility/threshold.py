@@ -11,18 +11,14 @@ LLM 없이 지침서에 적힌 산식을 그대로 옮긴 순수 함수만 둔�
     2,564,238원 × 32% = 820,556.16 → 반올림 → 820,556원
 """
 
+from app.eligibility.money import rate_round
+
 TABLE_MAX_SIZE = 7  # 지침서 표에 나오는 최대 가구원 수 (1인 ~ 7인)
 
 
 def percent_of(amount: int, percent: float) -> int:
-    """amount 의 percent% 를 원 단위로 반올림해서 돌려준다.
-
-    + 0.5 후 int() 로 자르는 이유:
-        파이썬 기본 round() 는 0.5를 짝수 쪽으로 보내는 "은행가 반올림"이라
-        (round(2.5) == 2) 지침서 표와 1원씩 어긋날 수 있다.
-        +0.5 후 소수점을 버리면 일반적인 사사오입이 된다. (금액은 항상 양수)
-    """
-    return int(amount * percent / 100 + 0.5)
+    """amount 의 percent% 를 원 단위로 사사오입해서 돌려준다 (Decimal — app/eligibility/money.py 의 rate_round)."""
+    return rate_round(amount, percent)
 
 
 def extend_to_size(amounts: dict[int, int], household_size: int) -> int:
