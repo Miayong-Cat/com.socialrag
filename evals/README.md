@@ -103,10 +103,22 @@ python -m evals.eval_retrieval --all-parts                 # 서식·부록·목
 - **평가셋이 찾은 버그**: "당장 내일 먹을 쌀도 없어요"를 긴급 생계 신호로 못 잡았다 (`먹을 게/것이/거 없` 만 있었음) → `먹을 쌀도 없`, `먹을 것도 없`, `쌀도 없` 까지 잡도록 규칙을 넓혔다
 - engine 모드는 Claude 를 빼고 **엔진·규칙·검색만** 본다. "Claude 가 질문에서 조건을 제대로 뽑는가"는 chat 모드에서 잰다
 
-## 결과 — chat 모드 (Claude 포함) — API 결제 후 측정 예정
+## 결과 — chat 모드 (Claude 포함)
 
 질문을 챗봇에 그대로 보내 알아듣기 → 판정까지 끝까지 맞는지, 설명 질문은 정답 쪽을 인용하는지 본다.
 info 문항의 답변·검색 문맥은 `results/testset_chat.json` 에 저장돼 RAGAS 채점 입력이 된다.
+
+| 항목 | 결과 |
+|---|---|
+| 판정 (문항 단위 — 4개 제도 모두 맞아야 정답) | **25 / 25** |
+| 판정 (제도 단위 충족/미충족) | **100 / 100** |
+| 되물을 조건 | 5 / 5 |
+| 위기 감지 (위기 문항) | 5 / 5 |
+| 위기 감지 (전 문항, 오탐 포함) | 50 / 50 |
+| 설명 질문 — 정답 쪽 인용 | **15 / 15** |
+
+- Claude(`claude-opus-5-5`)가 자연어 질문에서 가구 조건을 뽑아 엔진에 넘기는 단계까지 포함해 판정 25문항이 모두 맞았다 — "LLM 이 계산하지 않고 조건만 옮긴다"는 설계가 숫자로 확인됨
+- engine 모드에서 검색이 놓친 **Q40**("일해서 번 돈은 얼마나 빼주나요?")은 chat 모드에서 정답 쪽(p.131)을 인용했다 — 챗봇은 Claude 가 지침서 용어로 바꾼 검색어(`search_query`)로 찾기 때문
 
 ```bash
 python -m evals.eval_testset                 # engine 모드 → results/testset_engine.json
@@ -136,7 +148,19 @@ python -m evals.eval_testset --chat --ids 2,27,40   # 일부만 (저장 안 함)
 ```bash
 python -m evals.log_report                   # 사용자 대화
 python -m evals.log_report --eval            # 평가 실행(eval_testset --chat)만
+python -m evals.log_report --eval --run dfd852   # 평가 실행 한 번만 (thread_id = eval-<번호>-<문항>)
 python -m evals.log_report --days 7 --save weekly   # 최근 7일 → results/log_report_weekly.md
 ```
 
-실제 수치는 결제 후 `eval_testset --chat` 을 돌리면 `--eval` 리포트로 처음 나온다.
+## 결과 — chat 모드 50문항 실행 (`results/log_report_eval_chat.md`)
+
+| 턴 종류 | 턴 수 | 평균 | 중간값 | p95 |
+|---|---:|---:|---:|---:|
+| 전체 | 50 | 14.6초 | 16.2초 | 21.7초 |
+| 되묻기 (Claude 1회) | 7 | 2.6초 | 2.5초 | 3.2초 |
+| 설명 답변 (Claude 2회 + 검색) | 17 | 14.3초 | 14.8초 | 19.7초 |
+| 판정 + 답변 (Claude 2회 + 검색 + 엔진) | 25 | 18.8초 | 18.3초 | 22.4초 |
+| 위기 중단 (규칙만) | 1 | 0.002초 | | |
+
+- 판정 시도 32 중 판정까지 간 것 25 (78.1%) — 나머지 7은 **일부러 조건을 빼 둔** 되묻기 문항이라 한 턴짜리 평가에서는 판정까지 가지 않는 게 정답
+- 시간 대부분은 답변 생성(Claude) — 되묻기 턴(이해만 하는 Claude 1회)은 2.6초. 그래서 답변 생성을 **스트리밍**으로 바꿔 화면에 써지는 대로 보여 준다 (`POST /api/chat/stream`)

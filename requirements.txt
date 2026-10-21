@@ -25,6 +25,10 @@ langgraph==1.2.16              # 상태 그래프 — 조건 되묻기 루프, �
 streamlit==1.66.0              # 화면 (상담 챗봇·판정 계산기·지침서 검색)
 httpx==0.28.1                  # 화면 → API 서버 호출
 
+# 8단계 평가 (evals/eval_ragas.py)
+ragas==0.4.3                   # Faithfulness · Answer Relevancy · Context Precision
+langchain-community==0.3.31    # ragas 0.4.3 이 0.4 대에서 빠진 모듈을 import 함 → 0.3 대로 고정
+
 # 테스트
 pytest==9.1.1
 httpx2==2.13.1  # TestClient가 사용

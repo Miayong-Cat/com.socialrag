@@ -81,3 +81,17 @@ def test_chat_mode_scoring():
     assert rows[27]["pass"] and rows[27]["missing"] == ["income", "assets"]   # 되물은 조건
     assert rows[40]["pass"] and rows[40]["cited_pages"] == [131]              # 정답 쪽 인용
     assert rows[40]["contexts"] == ["30% 공제"] and rows[40]["reference"]     # RAGAS 입력
+
+
+def test_ragas_scores_only_the_explanation():
+    """RAGAS 채점 입력: 코드가 붙인 출처 목록·면책 안내와 [p.쪽] 표시는 빼고 Claude 의 설명만 (evals/eval_ragas.py)."""
+    from app.chat.format import DISCLAIMER, UNCITED_WARNING, compose
+    from evals.eval_ragas import explanation_only
+
+    sources = [{"page": 47, "section": "Ⅱ", "quote": "가구원 및 그 친족이 신청"}]
+    text = "가구원이 신청 [p.47]합니다. 공무원도 가능 [p.47, p.48]합니다."
+    cleaned = explanation_only(compose(text, sources, None))
+    assert cleaned == "가구원이 신청합니다. 공무원도 가능합니다."
+    assert DISCLAIMER not in cleaned
+    assert explanation_only(compose("설명", [], None)) == "설명"  # 인용이 없으면 출처 대신 경고가 붙음
+    assert UNCITED_WARNING not in explanation_only(compose("설명", [], None))

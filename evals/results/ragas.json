@@ -1,0 +1,115 @@
+{
+  "judge": "claude-sonnet-5-5",
+  "summary": {
+    "faithfulness": 0.928,
+    "answer_relevancy": 0.829,
+    "context_precision": 0.892
+  },
+  "rows": [
+    {
+      "id": 36,
+      "question": "기초생활보장 급여 신청은 누가 할 수 있나요?",
+      "faithfulness": 0.929,
+      "answer_relevancy": 0.957,
+      "context_precision": 1.0
+    },
+    {
+      "id": 37,
+      "question": "신청할 때 어떤 서류를 내야 하나요?",
+      "faithfulness": 0.958,
+      "answer_relevancy": 0.796,
+      "context_precision": 0.833
+    },
+    {
+      "id": 38,
+      "question": "근로능력이 있다고 보는 나이는 몇 살부터 몇 살까지인가요?",
+      "faithfulness": 0.846,
+      "answer_relevancy": 0.908,
+      "context_precision": 1.0
+    },
+    {
+      "id": 39,
+      "question": "소득평가액은 어떻게 계산하나요?",
+      "faithfulness": 0.95,
+      "answer_relevancy": 0.979,
+      "context_precision": 0.5
+    },
+    {
+      "id": 40,
+      "question": "생계급여 받는데 일해서 번 돈은 얼마나 빼주나요?",
+      "faithfulness": 0.812,
+      "answer_relevancy": 0.645,
+      "context_precision": 1.0
+    },
+    {
+      "id": 41,
+      "question": "아들이 군대에 가면 가구원에서 빠지나요?",
+      "faithfulness": 0.85,
+      "answer_relevancy": 0.803,
+      "context_precision": 1.0
+    },
+    {
+      "id": 42,
+      "question": "전세 보증금은 재산으로 어떻게 평가하나요?",
+      "faithfulness": 0.96,
+      "answer_relevancy": 0.879,
+      "context_precision": 0.95
+    },
+    {
+      "id": 43,
+      "question": "통장에 있는 돈은 얼마까지 재산에서 빼주나요?",
+      "faithfulness": 0.96,
+      "answer_relevancy": 0.649,
+      "context_precision": 1.0
+    },
+    {
+      "id": 44,
+      "question": "자동차가 있으면 재산으로 어떻게 계산돼요?",
+      "faithfulness": 0.923,
+      "answer_relevancy": 0.811,
+      "context_precision": 0.95
+    },
+    {
+      "id": 45,
+      "question": "부양의무자가 있으면 부양능력은 어떻게 판정하나요?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.899,
+      "context_precision": 1.0
+    },
+    {
+      "id": 46,
+      "question": "아이를 낳으면 받을 수 있는 급여가 있나요?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.726,
+      "context_precision": 0.806
+    },
+    {
+      "id": 47,
+      "question": "수급자가 돌아가시면 장례 비용을 지원받을 수 있나요?",
+      "faithfulness": 0.913,
+      "answer_relevancy": 0.793,
+      "context_precision": 0.806
+    },
+    {
+      "id": 48,
+      "question": "급여 결정에 불만이 있으면 어떻게 다툴 수 있나요?",
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.822,
+      "context_precision": 0.833
+    },
+    {
+      "id": 49,
+      "question": "급여가 중지되는 경우는 언제인가요?",
+      "faithfulness": 0.95,
+      "answer_relevancy": 0.949,
+      "context_precision": 0.7
+    },
+    {
+      "id": 50,
+      "question": "급여 신청은 어디에서 하나요?",
+      "faithfulness": 0.875,
+      "answer_relevancy": 0.819,
+      "context_precision": 1.0
+    }
+  ]
+}

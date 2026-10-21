@@ -13,6 +13,7 @@
 사용법 (DB 실행 필요):
     python -m evals.log_report                    사용자 대화만
     python -m evals.log_report --eval             평가 실행만
+    python -m evals.log_report --eval --run dfd852   평가 실행 한 번만 (thread_id 가 eval-dfd852-…)
     python -m evals.log_report --days 7           최근 7일
     python -m evals.log_report --save weekly      evals/results/log_report_weekly.md 에도 저장
 """
@@ -197,7 +198,7 @@ def render(r: dict, title: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def load_turns(eval_only: bool, days: int | None) -> list[Turn]:
+def load_turns(eval_only: bool, days: int | None, run: str | None = None) -> list[Turn]:
     from sqlalchemy import func, select
 
     from app.database import SessionLocal
@@ -206,6 +207,8 @@ def load_turns(eval_only: bool, days: int | None) -> list[Turn]:
     query = select(AiSearchLog)
     is_eval = AiSearchLog.thread_id.startswith(EVAL_PREFIX)
     query = query.where(is_eval if eval_only else ~is_eval)
+    if run:  # 평가 실행 번호 (evals/eval_testset.py 가 thread_id 에 넣음) — 부분 실행이 섞이지 않게
+        query = query.where(AiSearchLog.thread_id.startswith(f"{EVAL_PREFIX}{run}-"))
     if days:
         # created_at 은 DB 의 now()(UTC) 로 찍히므로 비교도 DB 시각으로 한다 (PC 시각과 9시간 차이)
         query = query.where(AiSearchLog.created_at >= func.now() - timedelta(days=days))
@@ -220,12 +223,15 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="ai_search_logs 집계 리포트")
     parser.add_argument("--eval", action="store_true", help="평가 실행(eval-*) 기록만 집계")
+    parser.add_argument("--run", help="평가 실행 번호 하나만 (--eval 과 함께, thread_id 의 eval-<번호>-)")
     parser.add_argument("--days", type=int, help="최근 N일만")
     parser.add_argument("--save", metavar="LABEL", help="evals/results/log_report_LABEL.md 에 저장")
     args = parser.parse_args()
 
-    title = "챗봇 로그 리포트 — " + ("평가 실행" if args.eval else "사용자 대화") + (f" (최근 {args.days}일)" if args.days else "")
-    text = render(build_report(load_turns(args.eval, args.days)), title)
+    if args.run and not args.eval:
+        parser.error("--run 은 --eval 과 함께 씁니다")
+    title = "챗봇 로그 리포트 — " + ("평가 실행" if args.eval else "사용자 대화") + (f" {args.run}" if args.run else "") + (f" (최근 {args.days}일)" if args.days else "")
+    text = render(build_report(load_turns(args.eval, args.days, args.run)), title)
     print(text)
     if args.save:
         RESULTS_DIR.mkdir(exist_ok=True)
