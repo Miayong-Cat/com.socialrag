@@ -11,9 +11,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.eligibility.asset import asset_conversion
 from app.eligibility.household import Household
-from app.eligibility.income import income_evaluation, total_work_deduction
 from app.eligibility.judge import judge_household
 from app.eligibility.threshold import TABLE_MAX_SIZE
 from app.models import MedianIncome, WelfareProgram
@@ -46,16 +44,15 @@ def judge(db: Session, household: Household, year: int) -> list[ProgramJudgement
     # {제도 이름: 비율} — 판정 엔진은 DB 객체가 아니라 숫자만 받는다.
     judgements = judge_household(household, median_incomes, {p.name: p.max_income_ratio for p in programs})
 
-    # 계산 내역(소득평가액·재산 환산액)을 같이 싣는다. 재산 환산액은 제도와 무관해 한 번만 계산.
-    asset = asset_conversion(household)
+    # 계산 내역(근로소득·공제·소득평가액·재산 환산액)은 판정 엔진이 판정하면서 같이 돌려준다 (다시 계산하지 않음)
     return [
         ProgramJudgement(
             program=j.program,
             income_ratio=p.max_income_ratio,
-            earned_income=sum(e.monthly_income for e in household.earners),
-            work_deduction=total_work_deduction(household, j.program),
-            income_evaluation=income_evaluation(household, j.program),
-            asset_conversion=asset,
+            earned_income=j.earned_income,
+            work_deduction=j.work_deduction,
+            income_evaluation=j.income_evaluation,
+            asset_conversion=j.asset_conversion,
             recognized_income=j.recognized_income,
             threshold=j.threshold,
             eligible=j.eligible,

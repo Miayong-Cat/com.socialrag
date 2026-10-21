@@ -26,7 +26,7 @@ from dataclasses import dataclass  # 값만 담는 간단한 클래스를 만드
 
 from app.eligibility.asset import asset_conversion
 from app.eligibility.household import Household
-from app.eligibility.income import income_evaluation
+from app.eligibility.income import income_evaluation, total_work_deduction
 from app.eligibility.threshold import selection_threshold
 
 
@@ -39,6 +39,11 @@ class Judgement:
     threshold: int           # 선정기준액(원/월)
     eligible: bool           # 충족 여부 = 소득인정액 ≦ 선정기준액
     margin: int              # 선정기준액 − 소득인정액. 양수 = 여유 금액, 음수 = 초과 금액
+    # 계산 내역 — judge_household 가 채운다 (judge 는 소득인정액만 받으므로 0). 화면·답변의 "계산 근거"에 쓴다
+    earned_income: int = 0       # 근로·사업소득 합계
+    work_deduction: int = 0      # 근로소득공제액 (급여마다 다를 수 있음)
+    income_evaluation: int = 0   # 소득평가액
+    asset_conversion: int = 0    # 재산의 소득환산액
 
 
 def judge(
@@ -75,11 +80,6 @@ def judge(
     return results
 
 
-def recognized_income(household: Household, program: str) -> int:
-    """가구의 소득인정액(원/월) = 소득평가액(급여마다 다를 수 있음) + 재산의 소득환산액."""
-    return income_evaluation(household, program) + asset_conversion(household)
-
-
 def judge_household(
     household: Household,
     median_incomes: dict[int, int],
@@ -93,8 +93,13 @@ def judge_household(
     반환:           programs 에 넣은 순서대로 Judgement 목록
     """
     results = []
+    earned = sum(e.monthly_income for e in household.earners)
+    asset = asset_conversion(household)  # 재산 환산액은 제도와 상관없이 같다
     for name, percent in programs.items():
-        income = recognized_income(household, name)  # 이 제도 기준의 소득인정액
-        # 제도 하나만 넣어 judge() 를 부르고, 결과 목록의 첫 번째([0])를 꺼낸다.
-        results.append(judge(household.size, income, median_incomes, {name: percent})[0])
+        evaluation = income_evaluation(household, name)  # 이 제도 기준의 소득평가액 (공제가 제도마다 다를 수 있음)
+        # 제도 하나만 넣어 judge() 를 부르고, 결과 목록의 첫 번째([0])를 꺼내 계산 내역을 붙인다.
+        result = judge(household.size, evaluation + asset, median_incomes, {name: percent})[0]
+        result.earned_income, result.work_deduction = earned, total_work_deduction(household, name)
+        result.income_evaluation, result.asset_conversion = evaluation, asset
+        results.append(result)
     return results

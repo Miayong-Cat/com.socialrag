@@ -14,8 +14,6 @@ from app.chat.graph import Deps
 from app.chat.session import Chatbot
 from app.chat.state import to_household
 from app.chat.understand import Understanding
-from app.eligibility.asset import asset_conversion
-from app.eligibility.income import income_evaluation
 from app.eligibility.judge import judge_household
 from app.rag.generator import Answer, Source
 from evals.eval_testset import full_household, load_items, run_chat, run_engine, run_multiturn, scripted_bot, summarize
@@ -25,14 +23,8 @@ from tests.guide_2026 import MEDIAN_2026, PROGRAMS
 def judge_without_db(household):
     """app/services/eligibility.judge 와 같은 모양의 결과를 DB 없이 — 지침서 p.14 숫자로 계산."""
     return [
-        vars(j) | {
-            "income_ratio": PROGRAMS[j.program],
-            "income_evaluation": income_evaluation(household, j.program),
-            "asset_conversion": asset_conversion(household),
-            "source_document": "2026 국민기초생활보장 사업안내",
-            "source_page": 14,
-        }
-        for j in judge_household(household, MEDIAN_2026, PROGRAMS)
+        vars(j) | {"income_ratio": PROGRAMS[j.program], "source_document": "2026 국민기초생활보장 사업안내", "source_page": 14}
+        for j in judge_household(household, MEDIAN_2026, PROGRAMS)  # 계산 내역(소득평가액 등)은 엔진이 같이 돌려줌
     ]
 
 
