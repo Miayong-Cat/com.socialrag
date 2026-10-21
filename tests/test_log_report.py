@@ -75,3 +75,18 @@ def test_chatbot_log_fields_fit_turn():
 
     turns = [Turn(id=i, created_at=T0, **{k: v for k, v in log.items() if k != "question"}) for i, log in enumerate(fake.logs)]
     assert judgement_funnel(conversations(turns)) == {"attempts": 1, "succeeded": 1, "first_turn": 0, "avg_asks": 1}
+
+
+def test_failed_turns_are_counted_separately():
+    """실패한 턴: 따로 세고, 응답 시간은 '실패' 종류로, 검색 청크 평균에서는 뺀다. 판정 시도 중 실패면 시도 실패."""
+    failed = Turn(id=9, created_at=T0 + timedelta(minutes=9), thread_id="e", intent=None, crisis=None,
+                  retrieved_doc_count=0, response_time_ms=3000, waiting=False, missing_fields_count=0,
+                  eligibility_result=None, error="APIConnectionError: Connection error.")
+    asking = turn(8, "e", 1000, "eligibility", waiting=True, missing=1)
+    r = build_report([*TURNS, asking, failed])
+
+    assert r["failed"] == 1
+    assert r["latency_by_kind"]["실패"]["count"] == 1
+    assert r["avg_docs"] == build_report(TURNS)["avg_docs"]          # 실패 턴은 검색 평균에 안 들어감
+    assert r["funnel"]["attempts"] == 4 and r["funnel"]["succeeded"] == 2  # e 의 시도는 실패로
+    assert "- 실패한 턴: 1 (" in render(r, "t")

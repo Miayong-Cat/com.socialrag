@@ -18,6 +18,7 @@
 """
 
 import json
+import logging
 import uuid
 from collections.abc import Iterator
 from functools import lru_cache
@@ -30,6 +31,7 @@ from pydantic import BaseModel, Field
 from app.chat.session import Chatbot, Reply
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -108,5 +110,8 @@ def chat_stream(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
             yield line({"type": "error", "message": claude_error(e)})
         except LookupError as e:
             yield line({"type": "error", "message": str(e)})
+        except Exception:  # noqa: BLE001 — 응답 코드(200)가 이미 나갔으므로 그냥 끊지 말고 error 줄로 알린다
+            logger.exception("챗봇 스트리밍 실패 (thread_id=%s)", thread_id)
+            yield line({"type": "error", "message": "알 수 없는 오류로 답하지 못했습니다. 잠시 후 다시 시도해 주세요."})
 
     return StreamingResponse(events(), media_type="application/x-ndjson")

@@ -34,3 +34,5 @@ class AiSearchLog(Base):
     missing_fields_count: Mapped[int]                   # 부족해서 되물은 조건 수
     # 판정 요약 {"생계급여": true, …}. none_as_null → 판정 안 했으면 JSON 의 null 이 아니라 SQL NULL
     eligibility_result: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
+    # 실패한 턴이면 오류 종류·메시지 (성공이면 None). 실패도 기록해야 성공률·응답 시간이 성공한 턴만으로 부풀지 않는다
+    error: Mapped[str | None] = mapped_column(Text, default=None)

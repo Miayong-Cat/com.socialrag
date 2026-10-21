@@ -45,6 +45,7 @@ class Turn:
     waiting: bool
     missing_fields_count: int
     eligibility_result: dict | None
+    error: str | None = None  # 실패한 턴이면 오류 (성공이면 None)
 
 
 def percentile(values: list[int], p: float) -> int:
@@ -65,6 +66,8 @@ def latency(values: list[int]) -> dict:
 
 def turn_kind(t: Turn) -> str:
     """턴 종류 — 응답 시간이 하는 일에 따라 크게 다르므로 나눠서 본다."""
+    if t.error:
+        return "실패"              # 오류로 답하지 못함 (Claude 오류·연결 끊김 등)
     if t.crisis == "suicide":
         return "위기 중단"         # 규칙만 — Claude 호출 없음
     if t.waiting:
@@ -130,13 +133,14 @@ def build_report(turns: list[Turn]) -> dict:
             program_total[program] += 1
             program_ok[program] += bool(eligible)
 
-    answered = [t for t in turns if not t.waiting and t.crisis != "suicide"]
+    answered = [t for t in turns if not t.waiting and t.crisis != "suicide" and not t.error]
     asked = [t for t in turns if t.waiting]
     return {
         "turns": len(turns),
         "conversations": len(convs),
         "period": (min(t.created_at for t in turns), max(t.created_at for t in turns)),
-        "intent": Counter(t.intent or "(위기 중단)" for t in turns),
+        "intent": Counter(t.intent or ("(실패)" if t.error else "(위기 중단)") for t in turns),
+        "failed": sum(bool(t.error) for t in turns),
         "latency_all": latency([t.response_time_ms for t in turns]),
         "latency_by_kind": {k: latency(v) for k, v in sorted(by_kind.items())},
         "funnel": judgement_funnel(convs),
@@ -164,6 +168,7 @@ def render(r: dict, title: str) -> str:
         f"- 기간: {start:%Y-%m-%d %H:%M} ~ {end:%Y-%m-%d %H:%M} (DB 시각 = UTC, 한국 시각 −9시간)",
         f"- 대화 {r['conversations']}개 · 턴 {r['turns']}개 · 의도 "
         + ", ".join(f"{k} {v}" for k, v in r["intent"].most_common()),
+        f"- 실패한 턴: {r['failed']} ({pct(r['failed'], r['turns'])})",
         "",
         "## 응답 시간 (ms)",
         "",

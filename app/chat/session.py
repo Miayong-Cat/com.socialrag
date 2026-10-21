@@ -75,13 +75,22 @@ class Chatbot:
 
         # custom = 노드가 get_stream_writer() 로 보낸 글 조각, values = 노드가 끝날 때마다의 전체 상태
         result, interrupts = {}, None
-        for mode, data in self.graph.stream(graph_input, config, stream_mode=["custom", "values"]):
-            if mode == "custom":
-                yield data
-            elif "__interrupt__" in data:  # 그래프가 질문을 남기고 멈춤 (invoke 결과의 __interrupt__ 와 같음)
-                interrupts = data["__interrupt__"]
-            else:
-                result = data
+        try:
+            for mode, data in self.graph.stream(graph_input, config, stream_mode=["custom", "values"]):
+                if mode == "custom":
+                    yield data
+                elif "__interrupt__" in data:  # 그래프가 질문을 남기고 멈춤 (invoke 결과의 __interrupt__ 와 같음)
+                    interrupts = data["__interrupt__"]
+                else:
+                    result = data
+        except Exception as e:
+            # 실패한 턴도 기록한다 — 빼면 로그 리포트의 성공률·응답 시간이 성공한 턴만으로 계산된다
+            self.log(
+                thread_id=thread_id, question=message, intent=None, crisis=None, retrieved_doc_count=0,
+                response_time_ms=round((time.perf_counter() - started) * 1000), waiting=False,
+                missing_fields_count=0, eligibility_result=None, error=f"{type(e).__name__}: {e}"[:500],
+            )
+            raise
         if interrupts:
             result = result | {"__interrupt__": interrupts}
 

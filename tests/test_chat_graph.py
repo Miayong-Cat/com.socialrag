@@ -423,3 +423,28 @@ def test_new_question_while_asking_escapes():
     assert fake.searched == ["해산급여"]
     assert fake.answered[-1][0] == "그런데 아이 낳으면 받는 급여는 뭐예요?"
     assert bot.graph.get_state({"configurable": {"thread_id": "t"}}).values["household"]["size"] == 1  # 모은 조건은 남음
+
+
+def test_failed_turn_is_logged_and_stream_reports_error(client):
+    """실패한 턴도 ai_search_logs 에 error 와 함께 기록, 스트리밍은 Claude 오류가 아니어도 error 줄로 알린다."""
+    import json
+
+    from app.main import app
+    from app.routes.chat import get_chatbot
+
+    fake = Fake([u("info"), u("info")])
+
+    def broken_search(query):
+        raise RuntimeError("DB down")
+
+    fake.search = broken_search
+    bot = fake.bot()
+    try:
+        bot.send("t", "질문")
+    except RuntimeError:
+        pass
+    assert fake.logs[-1]["error"] == "RuntimeError: DB down" and fake.logs[-1]["waiting"] is False
+
+    app.dependency_overrides[get_chatbot] = lambda: bot
+    events = [json.loads(line) for line in client.post("/api/chat/stream", json={"message": "질문"}).text.splitlines()]
+    assert events[-1]["type"] == "error" and "알 수 없는 오류" in events[-1]["message"]

@@ -41,6 +41,16 @@ def create_tables() -> None:
     with engine.begin() as conn:  # begin() → 블록이 끝나면 자동 commit
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        for statement in ADDED_COLUMNS:
+            conn.execute(text(statement))
+
+
+# 이미 만들어진 테이블에 나중에 추가한 칸. create_all 은 "없는 테이블"만 만들고 칸은 추가하지 않으므로 직접 넣는다.
+# (마이그레이션 도구를 쓰기 전까지의 최소한의 방법 — IF NOT EXISTS 라 여러 번 실행해도 안전)
+ADDED_COLUMNS = [
+    "ALTER TABLE ai_search_logs ADD COLUMN IF NOT EXISTS error TEXT",  # 실패한 턴 기록 (app/models/ai_search_log.py)
+]
 
 
 def get_db():
