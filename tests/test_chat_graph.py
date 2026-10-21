@@ -85,7 +85,7 @@ def test_asks_missing_conditions_then_judges():
     fake = Fake([
         u("eligibility", query="생계급여 선정기준", size=1),           # 1턴: 1인 가구라는 것만 앎
         u("eligibility", region="서울", earned_income=1_100_000),        # 답 1: 지역·소득
-        u("info", housing=0, general=0, financial=0, car_full_rate=0, debt=0),  # 답 2: 재산 없음 (intent 는 무시돼야 함)
+        u("info", deduction="일반", housing=0, general=0, financial=0, car_full_rate=0, debt=0),  # 답 2: 해당 없음·재산 없음 (intent 는 무시돼야 함)
     ])
     bot = fake.bot()
 
@@ -95,9 +95,9 @@ def test_asks_missing_conditions_then_judges():
 
     second = bot.send("t", "서울이고 월 110만원 벌어요")
     assert second.waiting
-    assert second.text == question_for(["assets"])  # 남은 것만 다시 물음
+    assert second.text == question_for(["deduction", "assets"])  # 남은 것만 다시 물음 (근로소득이 있어 공제 유형도)
 
-    third = bot.send("t", "재산은 없어요")
+    third = bot.send("t", "해당 사항 없고 재산은 없어요")
     assert not third.waiting
     assert third.eligibility[0]["program"] == "생계급여"
     assert third.text.startswith("| 급여 | 결과 |")          # 판정표는 코드가 만들어 앞에 붙임
@@ -145,6 +145,11 @@ def test_missing_fields_and_to_household():
     assert household.earners[0].deduction is WorkDeduction.YOUTH
     assert household.housing == 0
     assert missing_fields(HouseholdInfo(size=1)) == ["region", "income", "assets"]
+    # 근로소득이 있으면 공제 유형을 묻는다 (없거나 0이면 묻지 않음)
+    worker = HouseholdInfo(size=1, region="서울", earned_income=1_000_000, housing=0)
+    assert missing_fields(worker) == ["deduction"]
+    assert missing_fields(worker.model_copy(update={"deduction": "일반"})) == []
+    assert missing_fields(worker.model_copy(update={"earned_income": 0})) == []
 
 
 def test_chat_api_continues_thread(client):

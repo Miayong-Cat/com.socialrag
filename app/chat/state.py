@@ -34,7 +34,7 @@ class HouseholdInfo(BaseModel):
         description=(
             "소득자의 근로소득공제 유형. 일반=보통, '30% 공제'=임신·출산 6개월 미만·사회복무요원, "
             "'20만원 + 30%'=65세 이상·등록장애인·35세 이상 학생, '60만원 + 30%'=34세 이하·대학생, "
-            "'20만원 + 50%'=장애인 직업재활 참여. 말하지 않았으면 null"
+            "'20만원 + 50%'=장애인 직업재활 참여. 해당 사항이 없다고 하면 '일반', 말하지 않았으면 null"
         ),
     )
     other_income: int | None = Field(None, description="그 밖의 월 소득(원): 연금·임대료·이자·정기 지원금 등")
@@ -53,6 +53,11 @@ REQUIRED: dict[str, str] = {
     "size": "가구원은 본인을 포함해 모두 몇 명인가요?",
     "region": "어디에 사시나요? (서울 / 경기 / 광역시·세종·창원 / 그 밖의 시·군)",
     "income": "가구 전체가 일해서 버는 돈(근로·사업소득)은 한 달에 얼마인가요? 없으면 '없음'이라고 해 주세요.",
+    "deduction": (
+        "일하시는 분이 다음 중 해당되는 게 있나요? 공제가 달라져요. "
+        "(34세 이하·대학생 / 65세 이상·등록장애인·35세 이상 학생 / 임신 중·출산 6개월 미만·사회복무요원 / "
+        "장애인 직업재활 참여 / 해당 없음)"
+    ),
     "assets": "재산을 알려 주세요 — 사는 집(자가면 집값, 전·월세면 보증금), 예금·적금, 자동차, 대출. 없으면 '없음'.",
 }
 
@@ -66,6 +71,9 @@ def missing_fields(info: HouseholdInfo) -> list[str]:
         missing.append("region")
     if info.earned_income is None:
         missing.append("income")
+    elif info.earned_income > 0 and info.deduction is None:
+        # 공제 유형에 따라 공제액이 크게 다르다 (월 100만원: 일반 30만 vs 34세 이하 72만) — 기본값으로 짐작하지 않고 묻는다
+        missing.append("deduction")
     if all(getattr(info, f) is None for f in ASSET_FIELDS):  # 재산 칸이 하나라도 채워지면 답한 것으로 봄
         missing.append("assets")
     return missing
@@ -88,6 +96,7 @@ def to_household(info: HouseholdInfo) -> Household:
     """수집한 조건 → 판정 엔진 입력. 모르는 금액은 0으로 본다 (필수 조건은 이미 채워진 상태에서 부름).
 
     근로소득은 가구 합계 하나로 받으므로 소득자 1명으로 계산한다 (소득자별 공제 유형이 다르면 오차 가능).
+    공제 유형은 근로소득이 있으면 missing_fields 가 물어보므로 여기서는 이미 채워져 있다 ("일반"은 안전장치).
     """
     earners = []
     if info.earned_income:
