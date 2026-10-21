@@ -123,3 +123,23 @@ def test_streaming_passes_pieces_and_returns_same_answer():
     assert pieces == ["30% ", "공제합니다."]
     assert answer.text == "30% 공제합니다. [p.131]"
     assert client.request is None  # create 는 부르지 않음
+
+
+def test_chatbot_answer_path_passes_dict_passages(monkeypatch):
+    """챗봇이 실제로 쓰는 경로(app/chat/graph.py 의 default_deps().answer): 상태의 dict 문단 → generator → 답.
+
+    generator 는 DB 모델이 아니라 Passage 칸(page·section·heading·text)만 읽는다 — dict 를 바꾼 가벼운 객체로도 문서가 맞게 만들어지는지.
+    """
+    from app.chat.graph import default_deps
+
+    client = FakeClient(NS(stop_reason="end_turn", content=[text_block("30% 공제합니다.", [citation(0, "30% 공제 적용")])]))
+    monkeypatch.setattr("app.rag.generator.anthropic.Anthropic", lambda: client)  # 진짜 Claude 대신
+    passages = [{"page": 131, "section": "Ⅲ. 소득조사", "heading": "4) 근로를 유인하기 위한 요인", "text": "근로･사업소득은 30% 공제 적용"}]
+
+    answer = default_deps().answer("공제는?", passages, None)
+
+    document = client.request["messages"][0]["content"][0]
+    assert document["title"] == "Ⅲ. 소득조사 > 4) 근로를 유인하기 위한 요인 p.131"
+    assert document["source"]["data"] == passages[0]["text"]
+    assert answer.text == "30% 공제합니다. [p.131]"
+    assert [(s.page, s.section) for s in answer.sources] == [(131, "Ⅲ. 소득조사")]
