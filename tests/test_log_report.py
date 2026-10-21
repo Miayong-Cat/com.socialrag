@@ -90,3 +90,11 @@ def test_failed_turns_are_counted_separately():
     assert r["avg_docs"] == build_report(TURNS)["avg_docs"]          # 실패 턴은 검색 평균에 안 들어감
     assert r["funnel"]["attempts"] == 4 and r["funnel"]["succeeded"] == 2  # e 의 시도는 실패로
     assert "- 실패한 턴: 1 (" in render(r, "t")
+
+
+def test_suicide_notice_turn_is_not_a_stop():
+    """자살 신호라도 제도 질문이라 안내만 붙이고 답한 턴(의도 있음)은 '위기 중단'이 아니라 답변 턴으로 센다."""
+    notice = turn(9, "f", 7000, "info", crisis="suicide")
+    r = build_report([*TURNS, notice])
+    assert r["latency_by_kind"]["위기 중단"]["count"] == 1          # d 의 stop 턴만
+    assert r["latency_by_kind"]["설명 답변"]["count"] == 2

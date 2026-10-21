@@ -500,3 +500,25 @@ def test_message_length_is_capped(client):
     app.dependency_overrides[get_chatbot] = lambda: Fake([]).bot()
     assert client.post("/api/chat", json={"message": "가" * (MAX_MESSAGE_CHARS + 1)}).status_code == 422
     assert client.post("/api/chat/stream", json={"message": "가" * (MAX_MESSAGE_CHARS + 1)}).status_code == 422
+
+
+# ── 위기 감지 오탐 (4차 독립 리뷰) ───────────────────────────
+
+
+def test_suicide_word_in_program_question_is_notice_not_stop():
+    """'자살예방 지원 제도'처럼 제도를 묻는 말은 109 안내를 붙이고 질문에도 답한다. 본인의 지금 마음이 드러나면 항상 멈춘다."""
+    from app.chat.crisis import SUICIDE_INFO_NOTICE
+
+    for question in ("자살예방 상담 지원 제도가 있나요?", "자살 유가족 지원 사업이 있나요?"):
+        c = detect(question)
+        assert (c.category, c.level) == ("suicide", "notice")
+    for question in ("자살하고 싶은데 지원 제도 같은 게 있나요?", "죽고 싶어요 상담 센터 알려 주세요",
+                     "요즘 자살 생각이 나요", "자해했어요 병원비 지원 되나요?"):
+        assert detect(question).level == "stop", question     # 놓치지 않는 쪽은 그대로
+
+    fake = Fake([u("info", query="자살예방 상담 지원")])
+    reply = fake.bot().send("t", "자살예방 상담 지원 제도가 있나요?")
+    assert reply.crisis == "suicide"
+    assert reply.text.startswith(SUICIDE_INFO_NOTICE)          # 안내는 항상 맨 앞
+    assert "설명입니다." in reply.text and fake.searched == ["자살예방 상담 지원"]  # 질문에도 답함
+    assert fake.logs[-1]["intent"] == "info"                   # 로그: 위기 중단이 아니라 답한 턴

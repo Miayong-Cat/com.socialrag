@@ -64,11 +64,16 @@ def latency(values: list[int]) -> dict:
     }
 
 
+def crisis_stopped(t: Turn) -> bool:
+    """위기 신호로 일반 흐름을 멈춘 턴 — 자살 신호라도 제도 질문이면 안내만 붙이고 답하므로(notice) 의도가 남는다."""
+    return t.crisis == "suicide" and t.intent is None
+
+
 def turn_kind(t: Turn) -> str:
     """턴 종류 — 응답 시간이 하는 일에 따라 크게 다르므로 나눠서 본다."""
     if t.error:
         return "실패"              # 오류로 답하지 못함 (Claude 오류·연결 끊김 등)
-    if t.crisis == "suicide":
+    if crisis_stopped(t):
         return "위기 중단"         # 규칙만 — Claude 호출 없음
     if t.waiting:
         return "되묻기"            # 알아듣기(Claude 1회)만
@@ -95,7 +100,7 @@ def judgement_funnel(convs: list[list[Turn]]) -> dict:
     for turns in convs:
         current = None  # 진행 중인 시도의 되묻기 횟수
         for t in turns:
-            if t.crisis == "suicide":
+            if crisis_stopped(t):
                 continue  # 위기 중단 턴은 시도에 넣지도 빼지도 않음
             if current is None and t.intent == "eligibility":
                 attempts, current = attempts + 1, 0
@@ -133,7 +138,7 @@ def build_report(turns: list[Turn]) -> dict:
             program_total[program] += 1
             program_ok[program] += bool(eligible)
 
-    answered = [t for t in turns if not t.waiting and t.crisis != "suicide" and not t.error]
+    answered = [t for t in turns if not t.waiting and not crisis_stopped(t) and not t.error]
     asked = [t for t in turns if t.waiting]
     return {
         "turns": len(turns),

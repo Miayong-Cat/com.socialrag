@@ -1,6 +1,6 @@
 """평가셋·채점 코드 테스트 (대상: evals/testset_2026.json, evals/eval_testset.py).
 
-- 평가셋 모양이 맞는지 (56문항, id, 유형별 필수 칸)
+- 평가셋 모양이 맞는지 (58문항, id, 유형별 필수 칸)
 - 손계산 정답이 판정 엔진과 맞는지 — DB 대신 지침서 표 숫자(tests/guide_2026.py)로 계산
 - chat 모드 채점이 챗봇 답을 제대로 읽는지 — Claude·DB 대신 가짜 의존성
 
@@ -34,9 +34,9 @@ def engine_judge(info):
 
 def test_testset_shape():
     items = load_items()
-    assert len(items) == 56
-    assert [it["id"] for it in items] == list(range(1, 57))
-    assert Counter(it["type"] for it in items) == {"eligibility": 26, "ask": 5, "crisis": 5, "info": 15, "multiturn": 5}
+    assert len(items) == 58
+    assert [it["id"] for it in items] == list(range(1, 59))
+    assert Counter(it["type"] for it in items) == {"eligibility": 26, "ask": 5, "crisis": 7, "info": 15, "multiturn": 5}
     for it in items:
         if it["type"] == "eligibility":
             assert set(it["expected"]) == set(PROGRAMS) and it["calc"] and it["evidence_pages"]
@@ -57,7 +57,8 @@ def test_hand_calculated_answers_match_engine():
     summary = summarize(rows)
     assert summary["eligibility"] == {"pass": 26, "total": 26}, [r["wrong"] for r in rows if r["type"] == "eligibility" and not r["pass"]]
     assert summary["ask"] == {"pass": 5, "total": 5}
-    assert summary["crisis_all"] == {"pass": 56, "total": 56}  # 위기 문항 + 나머지 문항 오탐 없음
+    assert summary["crisis_all"] == {"pass": 58, "total": 58}  # 위기 문항(대응 단계 포함) + 나머지 문항 오탐 없음
+    assert summary["crisis"] == {"pass": 7, "total": 7}
     assert summary["multiturn"] == {"pass": 5, "total": 5}, [(r["id"], r["wrong"]) for r in rows if r["type"] == "multiturn" and not r["pass"]]
 
 
