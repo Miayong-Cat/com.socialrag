@@ -58,6 +58,13 @@ def get_chatbot() -> Chatbot:
 KEY_ERROR = "Claude API 키가 없거나 잘못됐습니다 (.env 의 ANTHROPIC_API_KEY)"
 
 
+def claude_error(e: anthropic.APIError) -> str:
+    """Claude API 오류 → 화면에 보여 줄 문장. 키 오류 외에도 크레딧 부족(400)·과부하(529)·연결 실패가 있다."""
+    if isinstance(e, anthropic.AuthenticationError):
+        return KEY_ERROR
+    status_code = getattr(e, "status_code", None)
+    return f"지금은 AI 상담을 할 수 없습니다 (Claude API 오류{f' {status_code}' if status_code else ''}: {e.message})"
+
 
 def to_response(thread_id: str, reply: Reply) -> ChatResponse:
     return ChatResponse(
@@ -75,8 +82,8 @@ def chat(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
     thread_id = request.thread_id or uuid.uuid4().hex
     try:
         reply = bot.send(thread_id, request.message)
-    except anthropic.AuthenticationError as e:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, KEY_ERROR) from e
+    except anthropic.APIError as e:  # 키 오류·크레딧 부족·연결 실패 등 — 500 대신 이유를 알린다
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, claude_error(e)) from e
     except LookupError as e:  # 기준 중위소득 미적재 등 (app/services/eligibility.py)
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from e
     return to_response(thread_id, reply)
@@ -97,8 +104,8 @@ def chat_stream(request: ChatRequest, bot: Chatbot = Depends(get_chatbot)):
                     yield line({"type": "done"} | to_response(thread_id, item).model_dump())
                 else:
                     yield line({"type": "delta", "text": item})
-        except anthropic.AuthenticationError:
-            yield line({"type": "error", "message": KEY_ERROR})
+        except anthropic.APIError as e:
+            yield line({"type": "error", "message": claude_error(e)})
         except LookupError as e:
             yield line({"type": "error", "message": str(e)})
 

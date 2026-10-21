@@ -287,3 +287,28 @@ def test_basis_explains_work_deduction():
     assert "생계급여: 소득평가액 770,000원 (근로소득 1,100,000원에서 근로소득공제 330,000원을 뺌, p.131)" in basis
     assert "의료급여: 소득평가액 1,100,000원 (일반 근로소득공제 30%는 생계·주거·교육급여에만 있어 의료급여에는 적용 안 됨, p.131)" in basis
     assert "근로소득공제" not in format_basis([JUDGEMENT])  # 근로소득이 없으면 공제 설명도 없음
+
+
+def test_claude_failure_is_503_not_500(client):
+    """Claude API 가 실패하면(크레딧 부족·연결 실패 등) 500 대신 503 + 이유. 스트리밍은 error 줄."""
+    import json
+
+    import anthropic
+    import httpx
+
+    from app.main import app
+    from app.routes.chat import get_chatbot
+
+    def fail(*args, **kwargs):
+        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+
+    fake = Fake([])
+    fake.understand = fail
+    bot = fake.bot()
+    app.dependency_overrides[get_chatbot] = lambda: bot
+
+    response = client.post("/api/chat", json={"message": "받을 수 있나요?"})
+    assert response.status_code == 503 and "Claude API 오류" in response.json()["detail"]
+
+    events = [json.loads(line) for line in client.post("/api/chat/stream", json={"message": "받을 수 있나요?"}).text.splitlines()]
+    assert events[-1]["type"] == "error" and "Claude API 오류" in events[-1]["message"]
