@@ -312,3 +312,48 @@ def test_claude_failure_is_503_not_500(client):
 
     events = [json.loads(line) for line in client.post("/api/chat/stream", json={"message": "받을 수 있나요?"}).text.splitlines()]
     assert events[-1]["type"] == "error" and "Claude API 오류" in events[-1]["message"]
+
+
+# ── 독립 리뷰에서 찾은 상태 버그 (회귀 테스트) ─────────────────
+
+
+def test_failed_turn_does_not_swallow_next_question():
+    """답변 생성이 실패하면(Claude 529·연결 끊김) 노드가 남는다. 다음 메시지는 되묻기 답이 아니라 새 질문이어야 한다.
+
+    (전에는 남은 노드를 "되묻는 중"으로 보고 resume → 새 질문은 버려지고 실패한 앞 질문이 다시 실행됐다)
+    """
+    fake = Fake([u("info", query="Q1"), u("info", query="Q2")])
+    calls = []
+
+    def flaky_answer(question, passages, facts, on_text=None):
+        calls.append(question)
+        if len(calls) == 1:
+            raise RuntimeError("529 overloaded")
+        return Answer(text="설명입니다.", sources=fake.sources)
+
+    fake.answer = flaky_answer
+    bot = fake.bot()
+    try:
+        bot.send("t", "첫 질문")
+    except RuntimeError:
+        pass
+
+    reply = bot.send("t", "두 번째 질문")
+    assert calls == ["첫 질문", "두 번째 질문"]
+    assert fake.searched == ["Q1", "Q2"]
+    assert reply.text.startswith("설명입니다.")
+
+
+def test_crisis_during_asking_ends_the_asking():
+    """되묻는 중에 자살 신호 → 상담 안내로 끝나고, 다음 새 질문은 조건 답이 아니라 새 질문으로 처리된다."""
+    fake = Fake([u("eligibility", size=1), u("info", query="해산급여")])
+    bot = fake.bot()
+    assert bot.send("t", "생계급여 받을 수 있나요? 1인 가구").waiting
+
+    crisis = bot.send("t", "죽고 싶어요")
+    assert crisis.crisis == "suicide" and not crisis.waiting
+
+    reply = bot.send("t", "아이 낳으면 받는 급여는?")
+    assert not reply.waiting
+    assert fake.searched == ["해산급여"]
+    assert fake.answered[-1][0] == "아이 낳으면 받는 급여는?"

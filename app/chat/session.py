@@ -42,6 +42,14 @@ class Chatbot:
         self.graph = build_graph(deps or default_deps(), checkpointer)
         self.log = log  # 테스트에서는 기록을 목록에 모으는 가짜를 넣는다
 
+    def is_waiting(self, config: dict) -> bool:
+        """되묻는 중인가 = 멈춘 노드가 interrupt(질문)를 남겼나.
+
+        "남은 노드가 있나(.next)"로 보면 안 된다 — Claude 오류·연결 끊김으로 노드가 중간에 실패해도 .next 가 남는다.
+        그때 다음 메시지를 되묻기 답(resume)으로 넣으면 새 질문은 버려지고 실패한 앞 질문이 다시 실행된다.
+        """
+        return any(task.interrupts for task in self.graph.get_state(config).tasks)
+
     def send(self, thread_id: str, message: str) -> Reply:
         """사용자 메시지 하나 → 챗봇의 답."""
         *_, reply = self.stream(thread_id, message)  # 마지막 항목이 Reply
@@ -55,11 +63,15 @@ class Chatbot:
         """
         started = time.perf_counter()
         config = {"configurable": {"thread_id": thread_id}}
-        if self.graph.get_state(config).next:  # 멈춰 있는 노드가 있음 = 되묻는 중
+        if self.is_waiting(config):
             graph_input = Command(resume=message)
         else:
-            # 새 질문. 이전 턴의 검색·판정 결과는 지워서 섞이지 않게 한다 (가구 조건은 남김)
-            graph_input = {"messages": [{"role": "user", "content": message}], "eligibility": [], "passages": [], "sources": []}
+            # 새 질문. 이전 턴의 검색·판정 결과·되묻던 조건은 지워서 섞이지 않게 한다 (모은 가구 조건은 남김)
+            # 앞 턴이 중간에 실패해 남은 노드가 있어도 여기서 처음(START)부터 새로 시작한다
+            graph_input = {
+                "messages": [{"role": "user", "content": message}],
+                "eligibility": [], "passages": [], "sources": [], "pending_fields": [],
+            }
 
         # custom = 노드가 get_stream_writer() 로 보낸 글 조각, values = 노드가 끝날 때마다의 전체 상태
         result, interrupts = {}, None

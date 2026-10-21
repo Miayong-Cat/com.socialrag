@@ -64,9 +64,12 @@ def build_graph(deps: Deps, checkpointer=None):
         return "crisis_handler" if state["crisis"] and not state["notice"] else "understand"
 
     def crisis_handler_node(state: ChatState) -> dict:
-        """자살·자해 신호: 일반 흐름 대신 상담 전화를 안내하고 끝낸다."""
+        """자살·자해 신호: 일반 흐름 대신 상담 전화를 안내하고 끝낸다.
+
+        되묻는 중이었어도 되묻기를 끝낸다 (pending_fields 를 비움) — 남겨 두면 다음 새 질문이 조건 답으로 처리된다.
+        """
         message = detect(state["messages"][-1]["content"]).message
-        return {"answer": message, "sources": [], "messages": [{"role": "assistant", "content": message}]}
+        return {"answer": message, "sources": [], "pending_fields": [], "messages": [{"role": "assistant", "content": message}]}
 
     def understand_node(state: ChatState) -> dict:
         """마지막 사용자 말에서 의도·조건·검색어를 뽑아 상태에 반영한다."""
