@@ -1,13 +1,14 @@
 {
-  "description": "챗봇 평가셋 50문항 (8단계) — 질문 + 정답(판정 결과 / 되물을 조건 / 위기 신호 / 참고 답변) + 근거 쪽. 기준: 2026 국민기초생활보장 사업안내",
+  "description": "챗봇 평가셋 56문항 (8단계) — 질문 + 정답(판정 결과 / 되물을 조건 / 위기 신호 / 참고 답변) + 근거 쪽. 기준: 2026 국민기초생활보장 사업안내",
   "year": 2026,
   "notes": [
     "eligibility: 판정 질문. 정답 소득인정액은 지침서 계산식으로 손계산해 calc 에 적었다 (판정 엔진 출력을 복사하지 않음). 선정기준액은 p.14 표.",
     "eligibility 의 household 에 없는 칸은 0 (질문이 재산·소득을 다 말함). ask 의 household 에 없는 칸은 아직 모름(None).",
     "eligibility 의 '의료급여'는 소득·재산 기준만 본다 — 부양의무자 기준은 판정 범위 밖.",
-    "전·월세 보증금은 rented: true — 95%로 평가한다(p.164, 판정 엔진 asset.housing_value). 5·14번은 보증금이 기본재산액 이하라 95% 여부와 정답이 같다 (95%가 결과를 바꾸는 경우는 tests/test_eligibility_api.py 에서 검사).",
+    "전·월세 보증금은 rented: true — 95%로 평가한다(p.164, 판정 엔진 asset.housing_value). 5·14번은 보증금이 기본재산액 이하라 95% 여부와 정답이 같다 (95%가 판정을 바꾸는 경우: 51번 단일 턴, 54번 여러 턴).",
     "사는 집 가액이 있으면 자가인지 전·월세인지도 되묻는다 — 자가 문항은 rented: false (질문의 '○억짜리 집'을 자가로 알아듣는지 chat 모드에서 확인).",
     "근로소득이 있으면 공제 유형을 되묻는다 — 판정 문항은 질문에 '해당 사항 없음'을 넣어 deduction: 일반 (기본값으로 짐작하지 않음).",
+    "multiturn: 여러 턴 대화. turns 마다 user(보낼 말)·understood(Claude 가 이렇게 알아들어야 함 — engine 모드는 이걸 그대로 씀)·ask(그 턴 뒤 되물을 조건, [] = 안 물음). outcome: judged(판정, expected·assumed 비교) / give_up(판정 멈춤, gave_up 비교) / answered(마지막 말을 새 설명 질문으로 받아 답함). 채점은 안내 문구가 아니라 대화 상태로 한다.",
     "crisis 는 모든 문항에서 검사한다. 적지 않은 문항의 정답은 null (위기 신호 없음 = 오탐 검사).",
     "info 의 reference 는 RAGAS 채점용 참고 답변 — 지침서 본문을 읽고 요약했다."
   ],
@@ -247,6 +248,55 @@
 
     {"id": 50, "type": "info", "question": "급여 신청은 어디에서 하나요?",
      "reference": "주민등록상 주소지 관할 시·군·구 및 읍·면·동에서 연중 신청한다. 급여 종류별로 신청해도 신청 창구는 시·군·구 및 읍·면·동으로 단일화돼 있다. 주거가 일정하지 않으면 실제 거주지역을 관할하는 시·군·구(읍·면·동)에 신청한다.",
-     "relevant_pages": [47]}
+     "relevant_pages": [47]},
+
+    {"id": 51, "type": "eligibility", "question": "서울에서 혼자 살아요. 일은 안 하고 연금이 월 10만원 나와요. 1억7천만원 전세 보증금 말고는 재산이 없어요. 생계급여 받을 수 있나요?",
+     "household": {"size": 1, "region": "서울", "earned_income": 0, "other_income": 100000, "housing": 170000000, "rented": true},
+     "calc": "전세 보증금 1억7천 × 95% = 1억6,150만 − 기본재산액 9,900만 = 6,250만 × 1.04% = 650,000 + 연금 10만 → 750,000 ≤ 생계 820,556 (자가였다면 838,400 → 생계 미충족: 95% 가 판정을 바꾸는 경우)",
+     "expected": {"생계급여": {"recognized_income": 750000, "eligible": true}, "의료급여": {"recognized_income": 750000, "eligible": true}, "주거급여": {"recognized_income": 750000, "eligible": true}, "교육급여": {"recognized_income": 750000, "eligible": true}},
+     "evidence_pages": [14, 164, 192]},
+
+    {"id": 52, "type": "multiturn", "question": "혼자 사는데 생계급여 받을 수 있나요?", "outcome": "judged",
+     "note": "기본 되묻기 루프: 부족한 조건 → 남은 것만 → 판정 (2번 문항과 같은 가구)",
+     "turns": [
+       {"user": "혼자 사는데 생계급여 받을 수 있나요?", "understood": {"intent": "eligibility", "household": {"size": 1}}, "ask": ["region", "income", "assets"]},
+       {"user": "서울이고 한 달에 110만원 벌어요", "understood": {"household": {"region": "서울", "earned_income": 1100000}}, "ask": ["deduction", "assets"]},
+       {"user": "해당하는 건 없고 재산도 없어요", "understood": {"household": {"deduction": "일반", "housing": 0, "general": 0, "financial": 0, "car_full_rate": 0, "debt": 0}}, "ask": []}
+     ],
+     "expected": {"생계급여": {"recognized_income": 770000, "eligible": true}, "의료급여": {"recognized_income": 1100000, "eligible": false}, "주거급여": {"recognized_income": 770000, "eligible": true}, "교육급여": {"recognized_income": 770000, "eligible": true}}},
+
+    {"id": 53, "type": "multiturn", "question": "서울에서 혼자 살고 월 110만원 벌어요. 재산은 없어요. 받을 수 있나요?", "outcome": "judged",
+     "note": "공제 유형을 2번 물어도 모르면 일반 공제로 가정하고 판정 (무한 되묻기 방지)",
+     "turns": [
+       {"user": "서울에서 혼자 살고 월 110만원 벌어요. 재산은 없어요. 받을 수 있나요?", "understood": {"intent": "eligibility", "household": {"size": 1, "region": "서울", "earned_income": 1100000, "housing": 0, "general": 0, "financial": 0, "car_full_rate": 0, "debt": 0}}, "ask": ["deduction"]},
+       {"user": "기억이 안 나서 모르겠어요", "understood": {}, "ask": ["deduction"]},
+       {"user": "그것도 기억이 안 나요", "understood": {}, "ask": []}
+     ],
+     "expected": {"생계급여": {"recognized_income": 770000, "eligible": true}, "의료급여": {"recognized_income": 1100000, "eligible": false}, "주거급여": {"recognized_income": 770000, "eligible": true}, "교육급여": {"recognized_income": 770000, "eligible": true}},
+     "assumed": ["deduction"]},
+
+    {"id": 54, "type": "multiturn", "question": "서울에서 혼자 살아요. 일은 안 하고 연금이 월 10만원 나와요. 1억7천짜리 집 말고 재산은 없어요. 생계급여 되나요?", "outcome": "judged",
+     "note": "자가·전월세를 되묻고 전세면 95% — 51번과 같은 가구 (자가로 짐작했다면 생계 미충족)",
+     "turns": [
+       {"user": "서울에서 혼자 살아요. 일은 안 하고 연금이 월 10만원 나와요. 1억7천짜리 집 말고 재산은 없어요. 생계급여 되나요?", "understood": {"intent": "eligibility", "household": {"size": 1, "region": "서울", "earned_income": 0, "other_income": 100000, "housing": 170000000, "general": 0, "financial": 0, "car_full_rate": 0, "debt": 0}}, "ask": ["rented"]},
+       {"user": "전세예요", "understood": {"household": {"rented": true}}, "ask": []}
+     ],
+     "expected": {"생계급여": {"recognized_income": 750000, "eligible": true}, "의료급여": {"recognized_income": 750000, "eligible": true}, "주거급여": {"recognized_income": 750000, "eligible": true}, "교육급여": {"recognized_income": 750000, "eligible": true}}},
+
+    {"id": 55, "type": "multiturn", "question": "혼자 사는데 생계급여 받을 수 있나요?", "outcome": "answered",
+     "note": "되묻는 중 답 대신 다른 질문 → 되묻기를 그만두고 그 질문에 답함",
+     "turns": [
+       {"user": "혼자 사는데 생계급여 받을 수 있나요?", "understood": {"intent": "eligibility", "household": {"size": 1}}, "ask": ["region", "income", "assets"]},
+       {"user": "그 전에, 아이를 낳으면 받을 수 있는 급여가 있나요?", "understood": {"intent": "info", "new_question": true, "search_query": "해산급여 지급 대상"}, "ask": []}
+     ]},
+
+    {"id": 56, "type": "multiturn", "question": "기초생활수급 받을 수 있는지 궁금해요. 서울 살고 소득도 재산도 없어요.", "outcome": "give_up",
+     "note": "가정할 수 없는 조건(가구원 수)을 2번 물어도 모르면 판정을 멈추고 안내",
+     "turns": [
+       {"user": "기초생활수급 받을 수 있는지 궁금해요. 서울 살고 소득도 재산도 없어요.", "understood": {"intent": "eligibility", "household": {"region": "서울", "earned_income": 0, "housing": 0, "general": 0, "financial": 0, "car_full_rate": 0, "debt": 0}}, "ask": ["size"]},
+       {"user": "그건 말하기 좀 그래요", "understood": {}, "ask": ["size"]},
+       {"user": "글쎄요", "understood": {}, "ask": []}
+     ],
+     "gave_up": ["size"]}
   ]
 }

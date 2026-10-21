@@ -1,14 +1,15 @@
-"""챗봇 평가 — 평가셋 50문항(testset_2026.json)으로 판정·되묻기·위기 감지·검색을 채점한다.
+"""챗봇 평가 — 평가셋 56문항(testset_2026.json)으로 판정·되묻기·위기 감지·검색·여러 턴 대화를 채점한다.
 
 두 가지 모드:
     engine (기본, Claude 호출 없음 — 무료)
         eligibility  손계산 정답 가구를 판정 엔진에 직접 넣어 소득인정액·충족 여부가 맞는지
         ask          부분 조건에서 되물을 조건 목록(missing_fields)이 맞는지
-        crisis       50문항 전부에 위기 감지 규칙을 돌려 종류가 맞는지 (정답 null = 오탐 검사)
+        crisis       전 문항에 위기 감지 규칙을 돌려 종류가 맞는지 (정답 null = 오탐 검사)
         info         질문으로 검색해 5등 안에 정답 쪽이 나오는지 (Hit@5)
-    chat (--chat, Claude 호출 — 유료, 50문항 1회 약 $1 이하 예상)
+        multiturn    알아듣기 결과(understood)를 정답대로 넣은 챗봇으로 대화 한 편 — 되묻기 순서·가정·탈출·중단·판정
+    chat (--chat, Claude 호출 — 유료. 2026-10 실측: Opus 로 약 120회 호출 — 크레딧이 적으면 --ids 로 일부만)
         질문을 챗봇에 그대로 보내 "Claude 가 조건을 제대로 알아듣고 → 엔진 판정까지 맞게 가는지"를 본다.
-        info 문항은 답변·검색 문맥을 저장해 RAGAS 채점(evals/eval_ragas.py, 결제 후 작성)의 입력으로 쓴다.
+        info 문항은 답변·검색 문맥을 저장해 RAGAS 채점(evals/eval_ragas.py)의 입력으로 쓴다.
 
 사용법 (DB 실행 + 기준 중위소득·청크 적재 필요):
     python -m evals.eval_testset                    engine 모드
@@ -60,14 +61,111 @@ def compare_judgements(expected: dict, actual: list[dict]) -> dict:
     return {"pass": not wrong, "programs": len(expected), "eligible_ok": eligible_ok, "wrong": wrong}
 
 
+# ── 여러 턴 대화 (multiturn) — engine·chat 모드 공통 ──────────────
+
+
+def run_multiturn(item: dict, bot, thread_id: str) -> dict:
+    """대화 한 편을 턴마다 보내고 채점한다.
+
+    턴마다: 되물은 조건(pending_fields)이 정답 "ask" 와 같은지 ([] = 되묻지 않음), 위기 신호
+    끝에:   outcome — 안내 문구가 아니라 마지막 대화 상태로 판단한다 (문구를 바꿔도 채점이 안 깨지게)
+        judged    판정이 정답과 같고, 가정한 조건(assumed)도 같음
+        give_up   판정을 멈춤 (state.gave_up — 정답에 "gave_up" 이 있으면 조건도 같아야 함)
+        answered  마지막 말을 새 설명 질문(intent=info)으로 받아 답함 — 되묻기·판정·판정 멈춤이 아님
+    """
+    asks, crises = [], []
+    try:
+        for turn in item["turns"]:
+            reply = bot.send(thread_id, turn["user"])
+            state = bot.graph.get_state({"configurable": {"thread_id": thread_id}}).values
+            asks.append(state.get("pending_fields") if reply.waiting else [])
+            crises.append(reply.crisis or None)
+    except ScriptError as e:  # engine 모드 대본이 그래프 흐름과 어긋남 = 흐름이 정답과 다름
+        return {"pass": False, "asks": asks, "wrong": [str(e)], "crisis_found": next(filter(None, crises), None)}
+    expected_asks = [t["ask"] for t in item["turns"]]
+    wrong = [f"{i}턴 되물음 {got} (정답 {exp})" for i, (got, exp) in enumerate(zip(asks, expected_asks), start=1) if got != exp]
+
+    gave_up = state.get("gave_up") or []
+    outcome = item["outcome"]
+    if outcome == "judged":
+        if reply.eligibility:
+            wrong += compare_judgements(item["expected"], reply.eligibility)["wrong"]
+            if set(state.get("assumed") or []) != set(item.get("assumed", [])):
+                wrong.append(f"가정한 조건 {state.get('assumed')} (정답 {item.get('assumed', [])})")
+        else:
+            wrong.append("판정 없음")
+    elif outcome == "give_up":
+        if reply.waiting or reply.eligibility or not gave_up:
+            wrong.append("판정을 멈추지 않음")
+        elif "gave_up" in item and set(gave_up) != set(item["gave_up"]):
+            wrong.append(f"판정을 멈춘 조건 {gave_up} (정답 {item['gave_up']})")
+    elif outcome == "answered":
+        last = item["turns"][-1]["user"]
+        if reply.waiting or reply.eligibility or gave_up or state.get("intent") != "info" or state.get("question") != last:
+            wrong.append("마지막 말을 새 설명 질문으로 받아 답하지 않음")
+    # 위기 신호: 대화 중 처음 잡힌 것 (어느 턴에서든) — 문항 정답 expected_crisis 와 비교
+    return {"pass": not wrong, "asks": asks, "wrong": wrong, "crisis_found": next(filter(None, crises), None)}
+
+
+class ScriptError(Exception):
+    """engine 모드 대본(understood)이 모자람 — 그래프가 정답보다 알아듣기를 더 많이 부름."""
+
+
+def scripted_bot(item: dict, judge_household: Callable) -> "Chatbot":
+    """engine 모드용 챗봇 — Claude 대신 문항의 "understood"(정답으로 적어 둔 알아듣기 결과)를 턴마다 돌려준다.
+
+    그래서 engine 모드는 "알아들었다고 치고" 그래프 흐름(되묻기 순서·가정·탈출·중단)과 엔진 판정을 검사한다.
+    Claude 가 정말 그렇게 알아듣는지는 chat 모드에서 잰다.
+    """
+    from app.chat.graph import Deps
+    from app.chat.session import Chatbot
+    from app.chat.understand import Understanding
+    from app.rag.generator import Answer
+
+    script = [
+        Understanding(
+            intent=t["understood"].get("intent", "eligibility"),
+            household=HouseholdInfo(**t["understood"].get("household", {})),
+            search_query=t["understood"].get("search_query", t["user"]),
+            new_question=t["understood"].get("new_question", False),
+        )
+        for t in item["turns"]
+    ]
+    def understand(messages, known, asked):
+        if not script:
+            raise ScriptError(f"대본 {len(item['turns'])}턴보다 알아듣기를 더 부름 — 흐름이 정답과 다름")
+        return script.pop(0)
+
+    deps = Deps(
+        understand=understand,
+        search=lambda query: [],
+        judge=judge_household,
+        answer=lambda question, passages, facts, on_text=None: Answer(text="(engine 모드 — 설명 생략)"),
+    )
+    return Chatbot(deps, log=lambda **_: None)
+
+
 # ── engine 모드 ─────────────────────────────────────────────
 
 
-def run_engine(items: list[dict], judge: Callable[[HouseholdInfo], list[dict]], search_pages: Callable[[str], list[int]]) -> list[dict]:
-    """judge: 가구 → 판정 결과 dict 목록 / search_pages: 질문 → 검색된 쪽 목록 (등수 순)."""
+def run_engine(
+    items: list[dict],
+    judge: Callable[[HouseholdInfo], list[dict]],
+    search_pages: Callable[[str], list[int]],
+    judge_household: Callable | None = None,
+) -> list[dict]:
+    """judge: 가구 → 판정 결과 dict 목록 / search_pages: 질문 → 검색된 쪽 목록 (등수 순)
+    judge_household: 판정 엔진 입력(Household) → 판정 결과 — multiturn 문항의 챗봇이 쓴다 (없으면 multiturn 은 건너뜀)
+    """
     rows = []
     for it in items:
+        if it["type"] == "multiturn" and judge_household is None:
+            continue
         row = {"id": it["id"], "type": it["type"], "question": it["question"]}
+        if it["type"] == "multiturn":  # 위기 감지도 대화의 모든 턴에서 (첫 질문만 보지 않게)
+            row |= run_multiturn(it, scripted_bot(it, judge_household), f"engine-{it['id']}")
+            rows.append(row | crisis_check(it, row.pop("crisis_found")))
+            continue
         if it["type"] == "eligibility":
             row |= compare_judgements(it["expected"], judge(full_household(it)))
         elif it["type"] == "ask":
@@ -96,6 +194,10 @@ def run_chat(items: list[dict], bot) -> list[dict]:
     run = uuid.uuid4().hex[:6]
     for it in items:
         thread_id = f"eval-{run}-{it['id']}"  # ai_search_logs 에서 평가 트래픽을 걸러낼 수 있게
+        if it["type"] == "multiturn":  # 대화 한 편을 턴마다 보냄 — Claude 가 짧은 답("전세예요")을 제대로 알아듣는지
+            row = {"id": it["id"], "type": it["type"], "question": it["question"]} | run_multiturn(it, bot, thread_id)
+            rows.append(row | crisis_check(it, row.pop("crisis_found")))  # 턴마다 잡힌 위기 신호
+            continue
         reply = bot.send(thread_id, it["question"])
         state = bot.graph.get_state({"configurable": {"thread_id": thread_id}}).values
         row = {"id": it["id"], "type": it["type"], "question": it["question"], "waiting": reply.waiting, "reply": reply.text}
@@ -149,6 +251,7 @@ LABELS = {
     "crisis": "위기 감지 (위기 문항)",
     "crisis_all": "위기 감지 (전 문항 — 오탐 포함)",
     "info": "설명 질문",
+    "multiturn": "여러 턴 대화 (되묻기·가정·탈출·중단)",
 }
 
 
@@ -190,6 +293,7 @@ def main():
                 items,
                 judge=lambda info: [j.model_dump() for j in judge(db, to_household(info), YEAR)],
                 search_pages=lambda q: [c.page for c in search(db, q, k=TOP_K)],
+                judge_household=lambda household: [j.model_dump() for j in judge(db, household, YEAR)],
             )
 
     summary = summarize(rows)

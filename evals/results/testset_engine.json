@@ -1,8 +1,8 @@
 {
   "summary": {
     "eligibility": {
-      "pass": 25,
-      "total": 25
+      "pass": 26,
+      "total": 26
     },
     "ask": {
       "pass": 5,
@@ -16,13 +16,17 @@
       "pass": 14,
       "total": 15
     },
+    "multiturn": {
+      "pass": 5,
+      "total": 5
+    },
     "eligibility_programs": {
-      "pass": 100,
-      "total": 100
+      "pass": 104,
+      "total": 104
     },
     "crisis_all": {
-      "pass": 50,
-      "total": 50
+      "pass": 56,
+      "total": 56
     }
   },
   "rows": [
@@ -624,6 +628,106 @@
         29,
         376
       ],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 51,
+      "type": "eligibility",
+      "question": "서울에서 혼자 살아요. 일은 안 하고 연금이 월 10만원 나와요. 1억7천만원 전세 보증금 말고는 재산이 없어요. 생계급여 받을 수 있나요?",
+      "pass": true,
+      "programs": 4,
+      "eligible_ok": 4,
+      "wrong": [],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 52,
+      "type": "multiturn",
+      "question": "혼자 사는데 생계급여 받을 수 있나요?",
+      "pass": true,
+      "asks": [
+        [
+          "region",
+          "income",
+          "assets"
+        ],
+        [
+          "deduction",
+          "assets"
+        ],
+        []
+      ],
+      "wrong": [],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 53,
+      "type": "multiturn",
+      "question": "서울에서 혼자 살고 월 110만원 벌어요. 재산은 없어요. 받을 수 있나요?",
+      "pass": true,
+      "asks": [
+        [
+          "deduction"
+        ],
+        [
+          "deduction"
+        ],
+        []
+      ],
+      "wrong": [],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 54,
+      "type": "multiturn",
+      "question": "서울에서 혼자 살아요. 일은 안 하고 연금이 월 10만원 나와요. 1억7천짜리 집 말고 재산은 없어요. 생계급여 되나요?",
+      "pass": true,
+      "asks": [
+        [
+          "rented"
+        ],
+        []
+      ],
+      "wrong": [],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 55,
+      "type": "multiturn",
+      "question": "혼자 사는데 생계급여 받을 수 있나요?",
+      "pass": true,
+      "asks": [
+        [
+          "region",
+          "income",
+          "assets"
+        ],
+        []
+      ],
+      "wrong": [],
+      "crisis": null,
+      "crisis_ok": true
+    },
+    {
+      "id": 56,
+      "type": "multiturn",
+      "question": "기초생활수급 받을 수 있는지 궁금해요. 서울 살고 소득도 재산도 없어요.",
+      "pass": true,
+      "asks": [
+        [
+          "size"
+        ],
+        [
+          "size"
+        ],
+        []
+      ],
+      "wrong": [],
       "crisis": null,
       "crisis_ok": true
     }

@@ -142,6 +142,7 @@ class ChatState(TypedDict, total=False):
     pending_fields: list[str]   # 아직 모르는 필수 조건 — 비어 있지 않으면 되묻는 중
     ask_counts: dict            # {조건: 이번 질문에서 물어본 횟수} — MAX_ASKS 를 넘기면 더 묻지 않음
     assumed: list[str]          # 답을 못 들어 가정하고 판정한 조건 (ASSUMABLE) — 답변에 "가정함" 표시
+    gave_up: list[str]          # 답을 못 들어 판정을 멈춘 조건 (give_up) — 평가·로그가 안내 문구 대신 이걸 본다
     eligibility: list[dict]     # 판정 결과 (app/schemas.py 의 ProgramJudgement)
     passages: list[dict]        # 검색한 지침서 청크 {page, section, heading, text}
     crisis: str                 # 이번 메시지의 위기 신호 종류 ("" = 없음) — app/chat/crisis.py

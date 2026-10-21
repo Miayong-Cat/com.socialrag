@@ -121,8 +121,9 @@ def build_graph(deps: Deps, checkpointer=None):
     def give_up_node(state: ChatState) -> dict:
         """같은 조건을 MAX_ASKS 번 물어도 답을 못 들음 — 되묻기를 끝내고 무엇이 필요한지 안내한다."""
         counts = state.get("ask_counts") or {}
-        message = give_up_message([f for f in state["pending_fields"] if counts.get(f, 0) >= MAX_ASKS])
-        return {"answer": message, "sources": [], "pending_fields": [], "ask_counts": {},
+        fields = [f for f in state["pending_fields"] if counts.get(f, 0) >= MAX_ASKS]
+        message = give_up_message(fields)
+        return {"answer": message, "sources": [], "pending_fields": [], "ask_counts": {}, "gave_up": fields,
                 "messages": [{"role": "assistant", "content": message}]}
 
     def ask_condition_node(state: ChatState) -> dict:
