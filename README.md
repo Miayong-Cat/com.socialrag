@@ -233,4 +233,4 @@ DB는 Docker로 띄운 **PostgreSQL 17** (+ 4단계 RAG용 pgvector 확장 포�
 | 5 | 검색 품질 개선 | ✅ 구조 기반 청킹 + 본문 필터 — Hit@1 59.3% → 70.4%, MRR 0.728 → 0.827 ([비교표](evals/README.md)) |
 | 6 | LangGraph 대화형 챗봇 | ✅ 조건 되묻기 루프 + 판정 엔진 결합 + 멀티턴 (CLI, `POST /api/chat`) — 실제 Claude 로 확인 |
 | 7 | 도메인 특화 기능 | ✅ 위기 신호 감지·분기, 계산 근거·출처 표시, 무인용 경고, 면책 안내, `ai_search_logs` 기록 |
-| 8 | 평가 및 UI | 🔄 평가셋 50문항 + engine 모드 채점 (판정 100/100, 위기 50/50, 검색 Hit@5 14/15) + `ai_search_logs` 집계 리포트 + Streamlit UI(챗봇·판정 계산기·지침서 검색) — chat 모드·RAGAS·스트리밍은 API 결제 후 |
+| 8 | 평가 및 UI | 🔄 평가셋 56문항(여러 턴 대화 5 포함) — engine 모드 판정 104/104·여러 턴 5/5·위기 56/56·검색 Hit@5 14/15, chat 모드(수정 전 50문항) 전부 정답, RAGAS faithfulness 0.928 · answer relevancy 0.829 · context precision 0.892 ([평가 상세](evals/README.md)) + `ai_search_logs` 리포트 + Streamlit UI(스트리밍) + 독립 리뷰 반영 — **남은 것: 바뀐 평가셋으로 chat 모드 재측정** |
