@@ -466,3 +466,27 @@ def test_asks_rented_when_home_value_given():
     judged = bot.send("t", "모르겠어요")
     assert fake.judged[0].housing == 120_000_000                       # 자가로 가정 (100%)
     assert ASSUMPTION_NOTES["rented"] in judged.text
+
+
+# ── 자원 상한 (2차 독립 리뷰) ─────────────────────────────────
+
+
+def test_idle_threads_are_forgotten():
+    """THREAD_TTL_SECONDS 넘게 조용한 대화는 메모리에서 지운다 — 서버를 오래 켜 둬도 대화 상태가 끝없이 쌓이지 않게."""
+    from app.chat.session import THREAD_TTL_SECONDS
+
+    now = [0.0]
+    fake = Fake([u("eligibility", size=1), u("info"), u("info")])
+    bot = Chatbot(Deps(understand=fake.understand, search=fake.search, judge=fake.judge, answer=fake.answer),
+                  log=fake.log, clock=lambda: now[0])
+    state = lambda t: bot.graph.get_state({"configurable": {"thread_id": t}}).values  # noqa: E731
+
+    assert bot.send("old", "혼자 사는데 받을 수 있나요?").waiting
+    now[0] += THREAD_TTL_SECONDS - 1
+    bot.send("recent", "질문")
+    assert state("old")["household"]["size"] == 1          # 아직 TTL 안 지남
+
+    now[0] += 2                                            # old 는 TTL 초과, recent 는 아님
+    bot.send("new", "질문")
+    assert state("old") == {} and "old" not in bot.last_used
+    assert state("recent") and state("new")

@@ -8,6 +8,7 @@
     - 응답 시간·판정 결과 등을 ai_search_logs 에 기록한다 (app/services/search_log.py)
 """
 
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -35,12 +36,34 @@ def default_log(**fields) -> None:
     record(**fields)
 
 
-class Chatbot:
-    """그래프 하나 + 대화별 상태(thread_id 로 구분). 서버에서는 하나만 만들어 같이 쓴다."""
+THREAD_TTL_SECONDS = 2 * 60 * 60  # 마지막 메시지 뒤 이만큼 조용한 대화는 메모리에서 지운다 (2시간)
 
-    def __init__(self, deps: Deps | None = None, checkpointer=None, log: Callable[..., None] = default_log):
+
+class Chatbot:
+    """그래프 하나 + 대화별 상태(thread_id 로 구분). 서버에서는 하나만 만들어 같이 쓴다.
+
+    대화 상태는 메모리(InMemorySaver)에 쌓이므로, 오래 조용한 대화는 지운다 (forget_idle) — 안 지우면 서버를 켜 둔 동안 계속 늘어난다.
+    지운 대화에 다시 메시지를 보내면 새 대화로 시작한다 (모았던 가구 조건도 없음).
+    """
+
+    def __init__(self, deps: Deps | None = None, checkpointer=None, log: Callable[..., None] = default_log,
+                 clock: Callable[[], float] = time.monotonic):
         self.graph = build_graph(deps or default_deps(), checkpointer)
         self.log = log  # 테스트에서는 기록을 목록에 모으는 가짜를 넣는다
+        self.clock = clock  # 테스트에서는 시간을 마음대로 돌리는 가짜를 넣는다
+        self.last_used: dict[str, float] = {}  # {thread_id: 마지막 메시지 시각}
+        self.lock = threading.Lock()  # API 요청은 여러 스레드에서 동시에 오므로 last_used 를 고칠 때 잠근다
+
+    def forget_idle(self) -> list[str]:
+        """THREAD_TTL_SECONDS 넘게 조용한 대화의 상태를 지우고, 지운 thread_id 목록을 돌려준다."""
+        now = self.clock()
+        with self.lock:
+            idle = [t for t, at in self.last_used.items() if now - at > THREAD_TTL_SECONDS]
+            for thread_id in idle:
+                del self.last_used[thread_id]
+        for thread_id in idle:
+            self.graph.checkpointer.delete_thread(thread_id)
+        return idle
 
     def is_waiting(self, config: dict) -> bool:
         """되묻는 중인가 = 멈춘 노드가 interrupt(질문)를 남겼나.
@@ -62,6 +85,9 @@ class Chatbot:
         되묻기·자살 신호 안내처럼 Claude 가 쓰지 않는 답은 글 조각 없이 Reply 만 나온다.
         """
         started = time.perf_counter()
+        self.forget_idle()
+        with self.lock:
+            self.last_used[thread_id] = self.clock()
         config = {"configurable": {"thread_id": thread_id}}
         if self.is_waiting(config):
             graph_input = Command(resume=message)
