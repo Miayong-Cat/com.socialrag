@@ -29,13 +29,14 @@ class WelfareProgramCreate(BaseModel):
 
     name: str = Field(min_length=1, examples=["생계급여"])
     category: str = Field(min_length=1, examples=["기초생활보장"])
-    min_age: int | None = Field(default=None, ge=0)  # 나이는 음수 불가
-    max_age: int | None = Field(default=None, ge=0)
+    # min_age·max_age·max_asset_amount·household_types: 저장·검증만 하고 판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다
+    min_age: int | None = Field(default=None, ge=0, description="최소 나이 (판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다)")  # 나이는 음수 불가
+    max_age: int | None = Field(default=None, ge=0, description="최대 나이 (판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다)")
     # 비율은 0% 초과 ~ 100% 이하만 허용 (150 같은 값은 422 에러)
     max_income_ratio: float | None = Field(default=None, gt=0, le=100, examples=[32])
-    max_asset_amount: int | None = Field(default=None, ge=0)
+    max_asset_amount: int | None = Field(default=None, ge=0, description="재산 기준액(원) (판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다)")
     # default_factory=list → 생략하면 빈 리스트 [] (요청마다 새 리스트를 만들어 서로 섞이지 않음)
-    household_types: list[str] = Field(default_factory=list)
+    household_types: list[str] = Field(default_factory=list, description="대상 가구 유형 (판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다)")
     source_document: str = Field(min_length=1, examples=["2026 국민기초생활보장 사업안내"])
     source_page: int | None = Field(default=None, ge=1)  # 쪽번호는 1부터
     updated_year: int = Field(ge=2000, le=2100, examples=[2026])  # 오타 방지용 범위

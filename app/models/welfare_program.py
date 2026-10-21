@@ -31,6 +31,7 @@ class WelfareProgram(Base):
     id: Mapped[int] = mapped_column(primary_key=True)  # 자동 증가 번호 (1, 2, 3 …)
     name: Mapped[str]                                # 제도 이름. 예: "생계급여"
     category: Mapped[str]                            # 분류. 예: "기초생활보장"
+    # ↓ min_age·max_age·max_asset_amount·household_types 는 판정에 아직 안 씀 (예정) — 지금 판정은 max_income_ratio 만 본다 (app/services/eligibility.py)
     min_age: Mapped[int | None]                      # 최소 나이 (나이 조건 없으면 None)
     max_age: Mapped[int | None]                      # 최대 나이 (나이 조건 없으면 None)
     max_income_ratio: Mapped[float | None]           # 기준 중위소득 대비 % 이하. 예: 32 → 32% 이하
