@@ -14,7 +14,8 @@ from types import SimpleNamespace
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from frontend.api_client import ApiClient, ApiError
+from app.eligibility.household import Region, WorkDeduction
+from frontend.api_client import DEDUCTIONS, REGIONS, ApiClient, ApiError
 from tests.test_eligibility_api import loaded  # noqa: F401 — fixture (2026 기준 숫자 적재)
 
 APP = str(Path(__file__).resolve().parent.parent / "frontend" / "streamlit_app.py")
@@ -159,3 +160,9 @@ def test_chat_error_is_shown_and_not_recorded(fake_api, monkeypatch):
     run(at)
     assert "503" in at.error[0].value
     assert at.session_state.messages == []
+
+
+def test_screen_options_match_engine():
+    """화면의 지역·공제 유형 목록 = 판정 엔진의 Enum — 화면은 서버 코드를 import 하지 않으므로 목록이 어긋나지 않게 여기서 지킨다."""
+    assert REGIONS == [r.value for r in Region]
+    assert sorted(DEDUCTIONS.values()) == sorted(d.value for d in WorkDeduction)

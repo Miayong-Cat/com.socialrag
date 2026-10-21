@@ -20,17 +20,8 @@ import pandas as pd
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # streamlit run 은 frontend/ 만 경로에 넣으므로
-from frontend.api_client import DEFAULT_URL, ApiClient, ApiError  # noqa: E402
+from frontend.api_client import DEDUCTIONS, DEFAULT_URL, REGIONS, ApiClient, ApiError  # noqa: E402
 
-# 판정 API 가 받는 값 (app/eligibility/household.py 의 Region·WorkDeduction 과 같아야 함)
-REGIONS = ["서울", "경기", "광역·세종·창원", "그 외 지역"]
-DEDUCTIONS = {
-    "일반": "일반",
-    "65세 이상 · 등록장애인 · 35세 이상 학생 (20만원 + 30%)": "20만원 + 30%",
-    "34세 이하 · 대학생 (60만원 + 30%)": "60만원 + 30%",
-    "임신 중 · 출산 6개월 미만 · 사회복무요원 (30%)": "30% 공제",
-    "장애인 직업재활 참여 (20만원 + 50%)": "20만원 + 50%",
-}
 MAN = 10_000
 MAX_MESSAGE_CHARS = 2000  # API(app/routes/chat.py)와 같은 상한 — 화면에서 먼저 막는다
 EXAMPLES = [

@@ -17,8 +17,10 @@ from pydantic import BaseModel, Field
 from app.eligibility.asset import housing_value
 from app.eligibility.household import Earner, Household, Region, WorkDeduction
 
-RegionName = Literal["서울", "경기", "광역·세종·창원", "그 외 지역"]
-DeductionName = Literal["일반", "30% 공제", "20만원 + 30%", "60만원 + 30%", "20만원 + 50%"]
+# 지역·공제 유형 이름은 판정 엔진의 Enum 에서 만든다 — 목록을 여기에 따로 적으면 엔진과 어긋날 수 있다.
+# (Enum 을 그대로 쓰지 않고 Literal 로 바꾸는 이유: Claude 에게 주는 JSON 스키마가 $ref 없이 값 목록으로 바로 들어가게)
+RegionName = Literal[tuple(r.value for r in Region)]  # type: ignore[valid-type]
+DeductionName = Literal[tuple(d.value for d in WorkDeduction)]  # type: ignore[valid-type]
 
 
 class HouseholdInfo(BaseModel):
