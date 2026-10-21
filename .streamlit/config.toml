@@ -1,0 +1,12 @@
+# Streamlit 화면 설정 — 프로젝트 폴더에서 `streamlit run frontend/streamlit_app.py` 할 때 읽힌다
+
+[theme]
+base = "light"
+primaryColor = "#0F766E"            # 포인트 색 (청록) — 버튼·탭 밑줄·링크
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F6F6"  # 입력칸·표 머리
+textColor = "#1F2933"
+baseRadius = "0.75rem"
+
+[client]
+toolbarMode = "minimal"             # 오른쪽 위 Deploy 버튼·개발자 메뉴 숨김

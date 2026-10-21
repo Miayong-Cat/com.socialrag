@@ -73,19 +73,21 @@ def fake_api(monkeypatch):
     """화면이 부르는 API 를 가짜로. 불린 기록을 calls 에 남긴다."""
     calls = []
 
-    def chat(self, message, thread_id=None):
+    def chat_stream(self, message, thread_id=None):
         calls.append(("chat", message, thread_id))
-        if thread_id is None:
-            return {"thread_id": "t1", "reply": "가구원은 몇 명인가요?", "waiting": True, "eligibility": [], "sources": []}
-        return {"thread_id": "t1", "reply": "| 급여 | 결과 |\n|---|---|\n| 생계급여 | ✅ 충족 |", "waiting": False,
-                "eligibility": [JUDGED], "sources": []}
+        if thread_id is None:  # 되묻기: 글 조각 없이 완성본만
+            yield {"type": "done", "thread_id": "t1", "reply": "가구원은 몇 명인가요?", "waiting": True, "eligibility": [], "sources": []}
+            return
+        yield {"type": "delta", "text": "| 급여 | 결과 |"}
+        yield {"type": "done", "thread_id": "t1", "reply": "| 급여 | 결과 |\n|---|---|\n| 생계급여 | ✅ 충족 |", "waiting": False,
+               "eligibility": [JUDGED], "sources": []}
 
     def judge(self, household):
         calls.append(("judge", household))
         return {"year": 2026, "household_size": household["size"], "results": [JUDGED]}
 
     monkeypatch.setattr(ApiClient, "is_up", lambda self: True)
-    monkeypatch.setattr(ApiClient, "chat", chat)
+    monkeypatch.setattr(ApiClient, "chat_stream", chat_stream)
     monkeypatch.setattr(ApiClient, "judge", judge)
     monkeypatch.setattr(ApiClient, "search", lambda self, q, k=5: [{"page": 131, "section": "Ⅲ", "heading": "", "text": "30% 공제"}] * k)
     return calls
@@ -149,8 +151,9 @@ def test_chat_error_is_shown_and_not_recorded(fake_api, monkeypatch):
     """API 실패(예: 키 오류 503): 에러를 보여 주고, 실패한 질문은 기록에 남기지 않는다."""
     def fail(self, message, thread_id=None):
         raise ApiError("[503] Claude API 키가 없거나 잘못됐습니다")
+        yield  # 제너레이터로 만들기 위한 줄 (실행되지 않음)
 
-    monkeypatch.setattr(ApiClient, "chat", fail)
+    monkeypatch.setattr(ApiClient, "chat_stream", fail)
     at = run(AppTest.from_file(APP))
     at.chat_input[0].set_value("받을 수 있나요?")
     run(at)

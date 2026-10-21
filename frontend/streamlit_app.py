@@ -4,6 +4,7 @@
     uvicorn app.main:app
     streamlit run frontend/streamlit_app.py        → http://localhost:8501
 서버 주소를 바꾸려면 환경변수 API_URL (기본 http://127.0.0.1:8000)
+색·글꼴 등 테마: .streamlit/config.toml (프로젝트 폴더에서 실행해야 읽힘), 세부 모양: 아래 STYLE
 
 탭별로 필요한 것:
     상담 챗봇    Claude API (ANTHROPIC_API_KEY + 결제) + DB
@@ -47,23 +48,67 @@ def won(amount: int) -> str:
 # ── 공통 ────────────────────────────────────────────────────
 
 
-def sidebar() -> ApiClient:
-    with st.sidebar:
-        st.header("복지 판정 상담")
-        url = st.text_input("API 서버", os.environ.get("API_URL", DEFAULT_URL))
-        api = ApiClient(url)
-        if api.is_up():
-            st.success("서버 연결됨", icon="🟢")
-        else:
-            st.error("서버에 연결할 수 없습니다.\n\n`uvicorn app.main:app`", icon="🔴")
-        if st.button("새 대화 시작", use_container_width=True):
-            st.session_state.messages = []
-            st.session_state.thread_id = None
-        st.divider()
-        st.caption(
-            "기준: 2026 국민기초생활보장 사업안내\n\n"
-            "AI 참고용 1차 판정입니다. 부양의무자·근로능력 등 추가 조사로 결과가 달라질 수 있어요. "
-            "최종 확인은 주소지 행정복지센터나 보건복지상담센터 **129**에서 하세요."
+STYLE = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+html, body, [class*="st-"], .stMarkdown, button, input, textarea, select { font-family: 'Noto Sans KR', sans-serif; }
+.block-container { max-width: 860px; padding-top: 2.5rem; padding-bottom: 6rem; }
+
+/* 머리 */
+.hero { padding: 1.6rem 1.8rem; border-radius: 1.2rem; margin-bottom: 1.2rem;
+        background: linear-gradient(135deg, #ECF8F6 0%, #F7FBFA 60%, #FFFFFF 100%); border: 1px solid #DCEFEC; }
+.hero .badge { display: inline-block; font-size: .78rem; font-weight: 500; color: #0F766E;
+               background: #FFFFFF; border: 1px solid #CDE9E5; border-radius: 999px; padding: .15rem .7rem; }
+.hero h1 { font-size: 1.75rem; font-weight: 700; color: #12302C; margin: .7rem 0 .35rem; padding: 0; }
+.hero p { color: #4A5B59; margin: 0; line-height: 1.6; }
+
+/* 탭 */
+.stTabs [data-baseweb="tab-list"] { gap: .4rem; }
+.stTabs [data-baseweb="tab"] { font-size: 1rem; padding: .4rem .2rem; }
+
+/* 예시 질문 — 둥근 칩 */
+.st-key-examples button { border-radius: 999px; background: #F3FAF9; border: 1px solid #D5ECE8; color: #155E57;
+                          font-size: .92rem; padding: .55rem 1rem; text-align: left; justify-content: flex-start; }
+.st-key-examples button:hover { background: #E6F5F2; border-color: #0F766E; color: #0F766E; }
+
+/* 대화 말풍선 */
+[data-testid="stChatMessage"] { padding: .9rem 1.1rem; border-radius: 1rem; }
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) { background: #F1F8F7; }
+[data-testid="stChatMessage"] h1, [data-testid="stChatMessage"] h2,
+[data-testid="stChatMessage"] h3, [data-testid="stChatMessage"] h4 { font-size: 1.05rem; font-weight: 700; margin: 1rem 0 .3rem; padding: 0; }
+[data-testid="stChatMessage"] table { font-size: .92rem; }
+
+.footnote { color: #6B7A78; font-size: .8rem; line-height: 1.6; margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #E6ECEB; }
+</style>
+"""
+
+HERO = """
+<div class="hero">
+  <span class="badge">2026 국민기초생활보장 사업안내 기준</span>
+  <h1>복지 급여, 받을 수 있을까요?</h1>
+  <p>가구 상황을 편하게 말씀해 주세요. 받을 수 있는 급여를 계산하고, 지침서 근거와 함께 쉽게 설명해 드려요.</p>
+</div>
+"""
+
+FOOTNOTE = """
+<div class="footnote">
+  AI가 지침서를 바탕으로 만든 <b>참고용 1차 판정</b>이에요. 부양의무자·근로능력 등 추가 조사로 결과가 달라질 수 있어요.
+  최종 확인은 주소지 행정복지센터나 보건복지상담센터 <b>129</b>에서 하세요.
+</div>
+"""
+
+AVATARS = {"user": "🙂", "assistant": "🤝"}
+
+
+def header() -> ApiClient:
+    """스타일 + 머리. 서버 주소는 환경변수 API_URL 로만 바꾼다 (화면에는 꺼져 있을 때만 안내)."""
+    st.markdown(STYLE, unsafe_allow_html=True)
+    st.markdown(HERO, unsafe_allow_html=True)
+    api = ApiClient(os.environ.get("API_URL", DEFAULT_URL))
+    if not api.is_up():
+        st.warning(
+            "지금은 상담 서버에 연결할 수 없어요. 잠시 후 다시 시도해 주세요.\n\n"
+            "(개발자: `uvicorn app.main:app` 으로 API 서버를 켜 주세요)"
         )
     return api
 
@@ -89,13 +134,17 @@ def judgement_table(results: list[dict]) -> pd.DataFrame:
 
 
 def show_message(msg: dict):
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])  # 판정표·계산 근거·출처·면책 안내가 이미 들어 있음 (app/chat/format.py)
-        if msg.get("eligibility"):
-            with st.expander("판정 계산 상세"):
-                st.dataframe(judgement_table(msg["eligibility"]), hide_index=True)
-        if msg.get("waiting"):
-            st.caption("💬 위 질문에 답해 주시면 이어서 판정합니다.")
+    with st.chat_message(msg["role"], avatar=AVATARS[msg["role"]]):
+        message_body(msg)
+
+
+def message_body(msg: dict):
+    st.markdown(msg["content"])  # 판정표·계산 근거·출처·면책 안내가 이미 들어 있음 (app/chat/format.py)
+    if msg.get("eligibility"):
+        with st.expander("판정 계산 상세"):
+            st.dataframe(judgement_table(msg["eligibility"]), hide_index=True)
+    if msg.get("waiting"):
+        st.caption("💬 위 질문에 답해 주시면 이어서 판정합니다.")
 
 
 def chat_tab(api: ApiClient):
@@ -104,35 +153,54 @@ def chat_tab(api: ApiClient):
 
     # 탭 안의 chat_input 은 부른 자리에 그려진다 → 대화 기록 자리를 먼저 잡아 두고 입력창은 그 아래에
     history = st.container()
-    prompt = st.chat_input("궁금한 것을 물어보세요")
+    prompt = st.chat_input("예: 혼자 사는데 생계급여 받을 수 있나요?")
 
     with history:
+        intro = st.empty()  # 첫 화면 안내 — 질문을 보내면 지운다
         if not st.session_state.messages:
-            st.markdown("기초생활보장 급여를 **받을 수 있는지** 판정하고, 제도를 **지침서 근거와 함께** 설명해 드려요.")
-            cols = st.columns(2)
-            for i, example in enumerate(EXAMPLES):
-                if cols[i % 2].button(example, key=f"example-{i}", use_container_width=True):
-                    prompt = example
+            with intro.container(key="examples"):
+                st.markdown("**이렇게 물어보세요**")
+                cols = st.columns(2)
+                for i, example in enumerate(EXAMPLES):
+                    if cols[i % 2].button(example, key=f"example-{i}", use_container_width=True):
+                        prompt = example
+        elif st.button("↺ 새 대화 시작", key="reset"):
+            st.session_state.messages = []
+            st.session_state.thread_id = None
+            st.rerun()
 
         for msg in st.session_state.messages:
             show_message(msg)
         if prompt:
+            intro.empty()
             send(api, prompt)
 
 
 def send(api: ApiClient, prompt: str):
-    """질문 하나를 보내고 답을 기록·표시한다."""
+    """질문 하나를 보내고 답을 기록·표시한다. 답은 써지는 대로 보여 주다가, 다 오면 완성본으로 바꾼다."""
     show_message({"role": "user", "content": prompt})
-    with st.spinner("지침서를 찾아보고 판정하는 중…"):
+    with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+        box = st.empty()  # 미리 보기 글 → 완성된 답으로 갈아 끼울 자리
+        box.caption("지침서를 찾아보고 판정하는 중…")
+        preview, data = "", None
         try:
-            data = api.chat(prompt, st.session_state.thread_id)
+            for event in api.chat_stream(prompt, st.session_state.thread_id):
+                if event["type"] == "delta":
+                    preview += event["text"]
+                    box.markdown(preview + " ▌")
+                else:
+                    data = event
         except ApiError as e:
-            st.error(f"답변을 받지 못했습니다. {e}")
+            box.error(f"답변을 받지 못했습니다. {e}")
             return  # 실패한 질문은 기록에 남기지 않음 → 다시 보낼 수 있게
-    st.session_state.thread_id = data["thread_id"]
-    answer = {"role": "assistant", "content": data["reply"], "waiting": data["waiting"], "eligibility": data["eligibility"]}
-    st.session_state.messages += [{"role": "user", "content": prompt}, answer]
-    show_message(answer)
+        if data is None:
+            box.error("답변을 받지 못했습니다. 응답이 중간에 끊겼습니다.")
+            return
+        st.session_state.thread_id = data["thread_id"]
+        answer = {"role": "assistant", "content": data["reply"], "waiting": data["waiting"], "eligibility": data["eligibility"]}
+        st.session_state.messages += [{"role": "user", "content": prompt}, answer]
+        with box.container():
+            message_body(answer)
 
 
 # ── 탭 2: 판정 계산기 ───────────────────────────────────────
@@ -144,7 +212,7 @@ def money(box, label: str, key: str, help: str | None = None) -> int:
 
 
 def calculator_tab(api: ApiClient):
-    st.markdown("가구 조건을 넣으면 **판정 엔진**이 바로 계산합니다. (Claude 호출 없음 — 같은 입력이면 항상 같은 결과)")
+    st.markdown("가구 조건을 넣으면 바로 계산해 드려요. 같은 조건이면 언제나 같은 결과가 나와요.")
     with st.form("calculator"):
         c1, c2 = st.columns(2)
         size = c1.number_input("가구원 수 (본인 포함)", min_value=1, max_value=20, value=1, key="size")
@@ -205,7 +273,7 @@ def calculator_tab(api: ApiClient):
 
 
 def search_tab(api: ApiClient):
-    st.markdown("챗봇이 답변 근거로 쓰는 것과 같은 검색입니다. (Claude 호출 없음)")
+    st.markdown("상담에서 근거로 쓰는 「국민기초생활보장 사업안내」 지침서를 직접 찾아볼 수 있어요.")
     c1, c2 = st.columns([4, 1])
     query = c1.text_input("검색어", placeholder="예: 근로소득 공제, 자동차 재산, 해산급여", key="query")
     k = c2.number_input("개수", min_value=1, max_value=20, value=5, key="k")
@@ -224,15 +292,16 @@ def search_tab(api: ApiClient):
 
 
 def main():
-    st.set_page_config(page_title="복지 판정 상담", page_icon="🏛️", layout="wide")
-    api = sidebar()
-    chat, calculator, search = st.tabs(["💬 상담 챗봇", "🧮 판정 계산기", "🔎 지침서 검색"])
+    st.set_page_config(page_title="복지 판정 상담", page_icon="🤝", layout="centered")
+    api = header()
+    chat, calculator, search = st.tabs(["상담하기", "직접 계산하기", "지침서 찾아보기"])
     with chat:
         chat_tab(api)
     with calculator:
         calculator_tab(api)
     with search:
         search_tab(api)
+    st.markdown(FOOTNOTE, unsafe_allow_html=True)
 
 
 main()
