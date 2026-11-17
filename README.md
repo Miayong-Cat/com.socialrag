@@ -104,6 +104,12 @@ streamlit run frontend/streamlit_app.py   # 웹 화면 → http://localhost:8501
 pytest                            # 메모리 DB를 쓰므로 Docker 없이도 실행됨
 ```
 
+**테스트가 `ImportError`·`DLL load failed ... 애플리케이션 제어 정책` 으로 멈출 때** — Windows 스마트 앱 컨트롤이 서명 없는 `.pyd`(SQLAlchemy C 확장)를 막는 경우다. SQLAlchemy 를 순수 파이썬으로 다시 설치한다 (`pip install -r requirements.txt` 나 venv 를 다시 만든 뒤에도 다시 해야 함)
+
+```powershell
+$env:DISABLE_SQLALCHEMY_CEXT='1'; venv\Scripts\python -m pip install --force-reinstall --no-deps --no-binary sqlalchemy sqlalchemy==2.1.2
+```
+
 **웹 화면 탭** — 상담 챗봇(Claude 필요) · 판정 계산기(판정 API, 만원 단위 입력, 전·월세 보증금 95% 자동 적용) · 지침서 검색(`GET /api/search`). API 서버 주소는 환경변수 `API_URL` (기본 `http://127.0.0.1:8000`)
 
 ## 복지제도 API (`/api/welfare`)

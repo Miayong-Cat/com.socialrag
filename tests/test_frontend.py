@@ -11,6 +11,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -46,7 +47,11 @@ def test_client_error_message(api):
 
 
 def test_client_server_down():
-    api = ApiClient("http://127.0.0.1:9")  # 아무것도 없는 포트
+    def refuse(request):
+        raise httpx.ConnectError("연결 거부", request=request)
+
+    # 진짜 빈 포트에 붙으면 Windows 는 거부당해도 재시도하느라 한 번에 ~2초 걸린다 → 연결 실패를 흉내 낸다
+    api = ApiClient("http://127.0.0.1:9", transport=httpx.MockTransport(refuse))
     assert not api.is_up()
     with pytest.raises(ApiError, match="연결할 수 없습니다"):
         api.search("근로소득")
