@@ -1,8 +1,8 @@
 """평가셋·채점 코드 테스트 (대상: evals/testset_2026.json, evals/eval_testset.py).
 
-- 평가셋 모양이 맞는지 (70문항, id, 유형별 필수 칸)
+- 평가셋 모양이 맞는지 (72문항, id, 유형별 필수 칸)
 - 손계산 정답이 판정 엔진과 맞는지 — DB 대신 지침서 표 숫자(tests/guide_2026.py)로 계산
-- chat 모드 채점이 챗봇 답을 제대로 읽는지 — Claude·DB 대신 가짜 의존성
+- chat 모드 채점이 챗봇 답을 제대로 읽는지 — LLM·DB 대신 가짜 의존성
 
 실행:
     pytest tests/test_testset.py
@@ -34,16 +34,16 @@ def engine_judge(info):
 
 def test_testset_shape():
     items = load_items()
-    assert len(items) == 70
-    assert [it["id"] for it in items] == list(range(1, 71))
-    assert Counter(it["type"] for it in items) == {"eligibility": 26, "ask": 5, "crisis": 19, "info": 15, "multiturn": 5}
+    assert len(items) == 72
+    assert [it["id"] for it in items] == list(range(1, 73))
+    assert Counter(it["type"] for it in items) == {"eligibility": 26, "ask": 5, "crisis": 19, "info": 15, "multiturn": 7}
     for it in items:
         if it["type"] == "eligibility":
             assert set(it["expected"]) == set(PROGRAMS) and it["calc"] and it["evidence_pages"]
         if it["type"] == "info":
             assert it["reference"] and it["relevant_pages"]
         if it["type"] == "multiturn":
-            assert it["outcome"] in {"judged", "give_up", "answered"} and it["turns"][-1]["ask"] == []
+            assert it["outcome"] in {"judged", "give_up", "answered", "crisis_stop"} and it["turns"][-1]["ask"] == []
             assert all({"user", "understood", "ask"} <= set(t) for t in it["turns"])
             assert ("expected" in it) == (it["outcome"] == "judged")
 
@@ -57,13 +57,13 @@ def test_hand_calculated_answers_match_engine():
     summary = summarize(rows)
     assert summary["eligibility"] == {"pass": 26, "total": 26}, [r["wrong"] for r in rows if r["type"] == "eligibility" and not r["pass"]]
     assert summary["ask"] == {"pass": 5, "total": 5}
-    assert summary["crisis_all"] == {"pass": 70, "total": 70}  # 위기 문항(대응 단계 포함) + 나머지 문항 오탐 없음
+    assert summary["crisis_all"] == {"pass": 72, "total": 72}  # 위기 문항(대응 단계 포함) + 나머지 문항 오탐 없음
     assert summary["crisis"] == {"pass": 19, "total": 19}
-    assert summary["multiturn"] == {"pass": 5, "total": 5}, [(r["id"], r["wrong"]) for r in rows if r["type"] == "multiturn" and not r["pass"]]
+    assert summary["multiturn"] == {"pass": 7, "total": 7}, [(r["id"], r["wrong"]) for r in rows if r["type"] == "multiturn" and not r["pass"]]
 
 
 def test_chat_mode_scoring():
-    """chat 모드: 알아들은 조건 → 판정 → 채점. 가짜 Claude 가 정답 가구를 그대로 알아들었다고 가정."""
+    """chat 모드: 알아들은 조건 → 판정 → 채점. 가짜 LLM 이 정답 가구를 그대로 알아들었다고 가정."""
     items = {it["id"]: it for it in load_items({2, 27, 40})}
     understood = {
         items[2]["question"]: Understanding(intent="eligibility", household=full_household(items[2]), search_query="q"),
@@ -85,7 +85,7 @@ def test_chat_mode_scoring():
 
 
 def test_ragas_scores_only_the_explanation():
-    """RAGAS 채점 입력: 코드가 붙인 출처 목록·면책 안내와 [p.쪽] 표시는 빼고 Claude 의 설명만 (evals/eval_ragas.py)."""
+    """RAGAS 채점 입력: 코드가 붙인 출처 목록·면책 안내와 [p.쪽] 표시는 빼고 LLM 의 설명만 (evals/eval_ragas.py)."""
     from app.chat.format import DISCLAIMER, UNCITED_WARNING, compose
     from evals.eval_ragas import explanation_only
 
@@ -123,3 +123,11 @@ def test_multiturn_script_mismatch_and_crisis_per_turn():
     row = run_engine([item | {"turns": turns, "outcome": "answered"}], judge=engine_judge,
                      search_pages=lambda q: [], judge_household=judge_without_db)[0]
     assert row["crisis"] == "suicide" and not row["crisis_ok"]          # 2턴의 위기 신호를 잡음 (정답은 위기 없음)
+
+
+def test_crisis_stop_outcome_needs_a_real_stop():
+    """crisis_stop 채점: LLM 이 위험을 못 보면(self_harm_risk 없음) 실패해야 한다 — 두 번째 방어선이 실제로 일했는지 재는 문항."""
+    item = load_items({71})[0]
+    missed = item | {"turns": [t | {"understood": {"intent": "info"}} for t in item["turns"]]}
+    assert run_multiturn(item, scripted_bot(item, judge_without_db), "t")["pass"]
+    assert not run_multiturn(missed, scripted_bot(missed, judge_without_db), "t")["pass"]

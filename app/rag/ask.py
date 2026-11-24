@@ -2,11 +2,11 @@
 
 사용법:
     python -m app.rag.ask "생계급여 근로소득 공제는 어떻게 되나요?"
-    python -m app.rag.ask "…" --search-only      LLM 없이 검색 결과만 보기 (API 키 불필요)
+    python -m app.rag.ask "…" --search-only      LLM 없이 검색 결과만 보기
 
 필요한 것:
     - DB에 청크가 적재돼 있어야 함 (python -m ingestion.load_chunks)
-    - 답변 생성까지 하려면 .env 에 ANTHROPIC_API_KEY
+    - 답변 생성까지 하려면 Ollama 실행 + 모델 (app/llm.py)
 """
 
 import argparse

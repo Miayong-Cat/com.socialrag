@@ -7,9 +7,9 @@
 색·글꼴 등 테마: .streamlit/config.toml (프로젝트 폴더에서 실행해야 읽힘), 세부 모양: 아래 STYLE
 
 탭별로 필요한 것:
-    상담 챗봇    Claude API (ANTHROPIC_API_KEY + 결제) + DB
-    판정 계산기  DB 만 — Claude 호출 없음
-    지침서 검색  DB + 임베딩 모델 — Claude 호출 없음
+    상담 챗봇    로컬 LLM (Ollama 실행 + 모델 — 무료) + DB
+    판정 계산기  DB 만 — LLM 호출 없음
+    지침서 검색  DB + 임베딩 모델 — LLM 호출 없음
 """
 
 import os

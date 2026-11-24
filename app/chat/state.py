@@ -18,13 +18,13 @@ from app.eligibility.asset import housing_value
 from app.eligibility.household import Earner, Household, Region, WorkDeduction
 
 # 지역·공제 유형 이름은 판정 엔진의 Enum 에서 만든다 — 목록을 여기에 따로 적으면 엔진과 어긋날 수 있다.
-# (Enum 을 그대로 쓰지 않고 Literal 로 바꾸는 이유: Claude 에게 주는 JSON 스키마가 $ref 없이 값 목록으로 바로 들어가게)
+# (Enum 을 그대로 쓰지 않고 Literal 로 바꾸는 이유: LLM 에게 주는 JSON 스키마가 $ref 없이 값 목록으로 바로 들어가게)
 RegionName = Literal[tuple(r.value for r in Region)]  # type: ignore[valid-type]
 DeductionName = Literal[tuple(d.value for d in WorkDeduction)]  # type: ignore[valid-type]
 
 
 class HouseholdInfo(BaseModel):
-    """대화에서 모은 가구 조건. 금액은 모두 원 단위. (Claude 구조화 출력의 형식으로도 쓴다)"""
+    """대화에서 모은 가구 조건. 금액은 모두 원 단위. (LLM 구조화 출력의 형식으로도 쓴다)"""
 
     size: int | None = Field(None, description="가구원 수 (본인 포함)")
     region: RegionName | None = Field(
@@ -148,6 +148,7 @@ class ChatState(TypedDict, total=False):
     eligibility: list[dict]     # 판정 결과 (app/schemas.py 의 ProgramJudgement)
     passages: list[dict]        # 검색한 지침서 청크 {page, section, heading, text}
     crisis: str                 # 이번 메시지의 위기 신호 종류 ("" = 없음) — app/chat/crisis.py
+    crisis_by: str              # 위기를 누가 잡았나 "rule"(키워드 규칙) / "model"(LLM 의 self_harm_risk) / ""
     crisis_level: str           # 위기 대응 단계 "stop"(흐름 멈춤) / "notice"(안내 붙이고 계속) / "" — 로그·평가가 추측하지 않게 그대로 남김
     notice: str                 # 답 앞에 붙일 위기 안내 ("" = 없음)
     answer: str                 # 이번 턴의 최종 답변

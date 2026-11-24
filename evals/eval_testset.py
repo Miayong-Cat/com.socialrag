@@ -1,19 +1,19 @@
 """챗봇 평가 — 평가셋 56문항(testset_2026.json)으로 판정·되묻기·위기 감지·검색·여러 턴 대화를 채점한다.
 
 두 가지 모드:
-    engine (기본, Claude 호출 없음 — 무료)
+    engine (기본, LLM 호출 없음 — 빠름)
         eligibility  손계산 정답 가구를 판정 엔진에 직접 넣어 소득인정액·충족 여부가 맞는지
         ask          부분 조건에서 되물을 조건 목록(missing_fields)이 맞는지
         crisis       전 문항에 위기 감지 규칙을 돌려 종류가 맞는지 (정답 null = 오탐 검사)
         info         질문으로 검색해 5등 안에 정답 쪽이 나오는지 (Hit@5)
         multiturn    알아듣기 결과(understood)를 정답대로 넣은 챗봇으로 대화 한 편 — 되묻기 순서·가정·탈출·중단·판정
-    chat (--chat, Claude 호출 — 유료. 2026-10 실측: Opus 로 약 120회 호출 — 크레딧이 적으면 --ids 로 일부만)
-        질문을 챗봇에 그대로 보내 "Claude 가 조건을 제대로 알아듣고 → 엔진 판정까지 맞게 가는지"를 본다.
+    chat (--chat, 로컬 LLM 호출 — 무료지만 오래 걸림. 약 200회 호출 — 먼저 --ids 로 일부만)
+        질문을 챗봇에 그대로 보내 "LLM 이 조건을 제대로 알아듣고 → 엔진 판정까지 맞게 가는지"를 본다.
         info 문항은 답변·검색 문맥을 저장해 RAGAS 채점(evals/eval_ragas.py)의 입력으로 쓴다.
 
 사용법 (DB 실행 + 기준 중위소득·청크 적재 필요):
     python -m evals.eval_testset                    engine 모드
-    python -m evals.eval_testset --chat             chat 모드 (.env 의 ANTHROPIC_API_KEY)
+    python -m evals.eval_testset --chat             chat 모드 (Ollama 실행 + 모델)
     python -m evals.eval_testset --chat --ids 1,2,36   일부 문항만
 결과: evals/results/testset_engine.json / testset_chat.json
 """
@@ -32,7 +32,7 @@ from app.chat.state import ASSET_FIELDS, HouseholdInfo, missing_fields, to_house
 EVAL_DIR = Path(__file__).resolve().parent
 TESTSET_PATH = EVAL_DIR / "testset_2026.json"
 RESULTS_DIR = EVAL_DIR / "results"
-TOP_K = 5  # 챗봇이 Claude 에 넘기는 청크 수
+TOP_K = 5  # 챗봇이 LLM 에 넘기는 청크 수
 
 
 def load_items(ids: set[int] | None = None) -> list[dict]:
@@ -72,6 +72,7 @@ def run_multiturn(item: dict, bot, thread_id: str) -> dict:
         judged    판정이 정답과 같고, 가정한 조건(assumed)도 같음
         give_up   판정을 멈춤 (state.gave_up — 정답에 "gave_up" 이 있으면 조건도 같아야 함)
         answered  마지막 말을 새 설명 질문(intent=info)으로 받아 답함 — 되묻기·판정·판정 멈춤이 아님
+        crisis_stop  위기로 멈춤 (state.crisis_level == "stop") — 키워드 규칙이 못 잡는 말은 LLM 의 self_harm_risk 가 잡아야 함
     """
     asks, crises = [], []
     try:
@@ -99,6 +100,9 @@ def run_multiturn(item: dict, bot, thread_id: str) -> dict:
             wrong.append("판정을 멈추지 않음")
         elif "gave_up" in item and set(gave_up) != set(item["gave_up"]):
             wrong.append(f"판정을 멈춘 조건 {gave_up} (정답 {item['gave_up']})")
+    elif outcome == "crisis_stop":  # 위기로 멈춤 — 규칙이든 LLM(self_harm_risk)든
+        if reply.waiting or state.get("crisis_level") != "stop":
+            wrong.append("위기로 멈추지 않음")
     elif outcome == "answered":
         last = item["turns"][-1]["user"]
         if reply.waiting or reply.eligibility or gave_up or state.get("intent") != "info" or state.get("question") != last:
@@ -112,10 +116,10 @@ class ScriptError(Exception):
 
 
 def scripted_bot(item: dict, judge_household: Callable) -> "Chatbot":
-    """engine 모드용 챗봇 — Claude 대신 문항의 "understood"(정답으로 적어 둔 알아듣기 결과)를 턴마다 돌려준다.
+    """engine 모드용 챗봇 — LLM 대신 문항의 "understood"(정답으로 적어 둔 알아듣기 결과)를 턴마다 돌려준다.
 
     그래서 engine 모드는 "알아들었다고 치고" 그래프 흐름(되묻기 순서·가정·탈출·중단)과 엔진 판정을 검사한다.
-    Claude 가 정말 그렇게 알아듣는지는 chat 모드에서 잰다.
+    LLM 이 정말 그렇게 알아듣는지는 chat 모드에서 잰다.
     """
     from app.chat.graph import Deps
     from app.chat.session import Chatbot
@@ -128,6 +132,7 @@ def scripted_bot(item: dict, judge_household: Callable) -> "Chatbot":
             household=HouseholdInfo(**t["understood"].get("household", {})),
             search_query=t["understood"].get("search_query", t["user"]),
             new_question=t["understood"].get("new_question", False),
+            self_harm_risk=t["understood"].get("self_harm_risk", False),
         )
         for t in item["turns"]
     ]
@@ -199,7 +204,7 @@ def run_chat(items: list[dict], bot) -> list[dict]:
     run = uuid.uuid4().hex[:6]
     for it in items:
         thread_id = f"eval-{run}-{it['id']}"  # ai_search_logs 에서 평가 트래픽을 걸러낼 수 있게
-        if it["type"] == "multiturn":  # 대화 한 편을 턴마다 보냄 — Claude 가 짧은 답("전세예요")을 제대로 알아듣는지
+        if it["type"] == "multiturn":  # 대화 한 편을 턴마다 보냄 — LLM 이 짧은 답("전세예요")을 제대로 알아듣는지
             row = {"id": it["id"], "type": it["type"], "question": it["question"]} | run_multiturn(it, bot, thread_id)
             rows.append(row | crisis_check(it, row.pop("crisis_found")))  # 턴마다 잡힌 위기 신호
             continue
@@ -213,7 +218,7 @@ def run_chat(items: list[dict], bot) -> list[dict]:
                         "wrong": [f"되물음: {state.get('pending_fields')}"]}
             else:
                 row |= compare_judgements(it["expected"], reply.eligibility)
-            row["household"] = state.get("household")  # Claude 가 알아들은 조건 (틀렸을 때 원인 보기)
+            row["household"] = state.get("household")  # LLM 이 알아들은 조건 (틀렸을 때 원인 보기)
         elif it["type"] == "ask":
             got = state.get("pending_fields") if reply.waiting else []
             row |= {"pass": got == it["expected_missing"], "missing": got}
@@ -277,7 +282,7 @@ def print_report(rows: list[dict], summary: dict, mode: str):
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="챗봇 평가셋 채점")
-    parser.add_argument("--chat", action="store_true", help="챗봇(Claude) 끝까지 실행 — 유료")
+    parser.add_argument("--chat", action="store_true", help="챗봇(로컬 LLM) 끝까지 실행 — 오래 걸림")
     parser.add_argument("--ids", help="일부 문항만 (쉼표로 구분한 id)")
     args = parser.parse_args()
     items = load_items({int(i) for i in args.ids.split(",")} if args.ids else None)

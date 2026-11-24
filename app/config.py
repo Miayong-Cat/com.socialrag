@@ -46,8 +46,6 @@ TEXT_JSONL_PATH = PROCESSED_DIR / f"text_{YEAR}.jsonl"
 EMBEDDING_MODEL = "BAAI/bge-m3"
 EMBEDDING_DIM = 1024  # BGE-m3 dense 벡터 길이 — guide_chunks 테이블의 벡터 칸 크기
 SPARSE_DIM = 250_002  # BGE-m3 토큰 종류 수 = sparse 벡터 차원 (= len(모델.tokenizer))
-# 답변 생성 LLM (Anthropic Claude). API 키는 .env 의 ANTHROPIC_API_KEY
-LLM_MODEL = "claude-opus-5-5"
 
 # ── DB 주소 ───────────────────────────────────────────────
 # DB는 Docker로 띄운 PostgreSQL 서버다 (docker-compose.yml).
@@ -57,6 +55,14 @@ LLM_MODEL = "claude-opus-5-5"
 #   이미 같은 이름의 환경변수가 있으면 덮어쓰지 않는다 (배포 서버에서 직접 설정한 값이 우선).
 #   .env 가 없어도 에러는 나지 않는다 → 아래 os.getenv 에서 기본값이 쓰인다.
 load_dotenv(ROOT / ".env")
+
+# ── LLM ───────────────────────────────────────────────────
+# Ollama 로 이 PC에서 돌린다 (무료, API 키 없음 — app/llm.py). 일마다 잘하는 모델이 달라 나눠 쓴다:
+LLM_MODEL = os.getenv("LLM_MODEL", "exaone3.5:7.8b")      # 질문 이해·위기 판단 (위기 표현을 가장 잘 가려냄)
+ANSWER_MODEL = os.getenv("ANSWER_MODEL", "gemma3:4b")     # 답변 생성 (문단 밖 내용을 가장 덜 지어냄)
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+LLM_TIMEOUT = 300  # 초. 로컬 모델은 첫 호출에 모델을 메모리로 올리느라 오래 걸릴 수 있다
+LLM_CONTEXT_TOKENS = 8192  # 프롬프트 + 답의 토큰 상한 (기본값이면 긴 프롬프트의 앞부분이 말없이 잘린다)
 
 
 def _postgres_url() -> str:

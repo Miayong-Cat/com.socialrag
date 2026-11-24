@@ -4,7 +4,7 @@
     python -m app.chat.cli
 필요한 것:
     - DB 실행 + 기준 중위소득·청크 적재 (README "데이터 적재")
-    - .env 에 ANTHROPIC_API_KEY
+    - Ollama 실행 + 모델 (app/llm.py)
 끝내려면 빈 줄에서 Enter 또는 Ctrl+C.
 """
 

@@ -13,7 +13,7 @@ from collections.abc import Iterator
 import httpx
 
 DEFAULT_URL = "http://127.0.0.1:8000"
-CHAT_TIMEOUT = 180  # 첫 질문은 임베딩 모델 로딩 + Claude 2회라 오래 걸릴 수 있음 (초)
+CHAT_TIMEOUT = 600  # 로컬 LLM 은 CPU 로 돌면 느리고, 첫 질문은 임베딩·LLM 모델 로딩까지 있어 오래 걸릴 수 있음 (초)
 TIMEOUT = 60
 
 

@@ -1,12 +1,12 @@
 """답변 꾸미기 — 판정표·계산 근거·출처·면책 안내를 코드로 만든다.
 
 숫자와 출처는 LLM 이 옮겨 적다 틀리면 안 되므로 전부 여기서 만든다.
-Claude 가 쓰는 부분은 "왜 그런지, 다음에 뭘 하면 되는지" 설명뿐이다.
+LLM 이 쓰는 부분은 "왜 그런지, 다음에 뭘 하면 되는지" 설명뿐이다.
 
 최종 답변 모양 (판정 질문):
     | 급여 | 결과 | 소득인정액 | 선정기준액 |      ← format_judgements
     **계산 근거** …                            ← format_basis
-    (Claude 설명)
+    (LLM 설명)
     **출처** 2026 국민기초생활보장 사업안내 …   ← format_sources (인용이 없으면 UNCITED_WARNING)
     ※ 참고용 1차 판정 …                       ← DISCLAIMER
 """
@@ -43,7 +43,7 @@ def format_basis(results: list[dict]) -> str:
     재산 환산액은 모든 급여가 같으므로 한 번만 쓰고, 급여마다 소득평가액·선정기준만 쓴다.
     근로소득이 있으면 급여마다 근로소득공제액과 그 근거 쪽도 쓴다 —
     의료급여는 일반 근로소득 30% 공제가 없어 소득평가액이 다를 수 있는데, 이유가 안 보이면
-    Claude 가 (검색된 문단에 근거가 없을 때) 맞는 판정을 의심하는 설명을 쓰기 때문이다.
+    LLM 이 (검색된 문단에 근거가 없을 때) 맞는 판정을 의심하는 설명을 쓰기 때문이다.
     """
     if not results:
         return ""
@@ -70,7 +70,7 @@ def deduction_note(r: dict) -> str:
 
 
 def format_sources(sources: list[dict]) -> str:
-    """Claude 가 인용한 문장 → 출처 목록 (쪽 순서, 같은 인용은 한 번만). 인용이 없으면 경고."""
+    """LLM 이 인용한 문장 → 출처 목록 (쪽 순서, 같은 인용은 한 번만). 인용이 없으면 경고."""
     if not sources:
         return UNCITED_WARNING
     seen, lines = set(), []

@@ -19,8 +19,8 @@
     한 방향으로만 흐르는 체인으로는 이 루프를 표현할 수 없다.
 
 노드가 쓰는 바깥 기능(LLM·DB)은 Deps 로 주입한다.
-    실제 실행: default_deps() — Claude + PostgreSQL
-    테스트:    가짜 함수 — API 키·DB 없이 그래프 흐름만 검증 (tests/test_chat_graph.py)
+    실제 실행: default_deps() — 로컬 LLM + PostgreSQL
+    테스트:    가짜 함수 — LLM·DB 없이 그래프 흐름만 검증 (tests/test_chat_graph.py)
 """
 
 from collections.abc import Callable
@@ -32,7 +32,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
 
-from app.chat.crisis import detect
+from app.chat.crisis import SUICIDE_MESSAGE, detect
 from app.chat.format import compose, format_assumptions, format_basis, format_judgements, give_up_message
 from app.chat.state import (
     ASSUMABLE,
@@ -66,20 +66,20 @@ def build_graph(deps: Deps, checkpointer=None):
         """마지막 사용자 말에 위기 신호가 있는지 규칙으로 살핀다 (모든 사용자 메시지마다)."""
         crisis = detect(state["messages"][-1]["content"])
         if crisis is None:
-            return {"crisis": "", "crisis_level": "", "notice": ""}
+            return {"crisis": "", "crisis_level": "", "crisis_by": "", "notice": ""}
         notice = crisis.message if crisis.level == "notice" else ""
-        return {"crisis": crisis.category, "crisis_level": crisis.level, "notice": notice}
+        return {"crisis": crisis.category, "crisis_level": crisis.level, "crisis_by": "rule", "notice": notice}
 
     def route_after_crisis(state: ChatState) -> str:
-        # 신호가 있는데 붙일 안내(notice)가 없다 = "stop" 단계 위기
-        return "crisis_handler" if state["crisis"] and not state["notice"] else "understand"
+        return "crisis_handler" if state["crisis_level"] == "stop" else "understand"
 
     def crisis_handler_node(state: ChatState) -> dict:
         """자살·자해 신호: 일반 흐름 대신 상담 전화를 안내하고 끝낸다.
 
+        규칙(crisis_check)이 잡았든 LLM(understand 의 self_harm_risk)가 잡았든 같은 안내.
         되묻는 중이었어도 되묻기를 끝낸다 (pending_fields 를 비움) — 남겨 두면 다음 새 질문이 조건 답으로 처리된다.
         """
-        message = detect(state["messages"][-1]["content"]).message
+        message = SUICIDE_MESSAGE
         return {"answer": message, "sources": [], "pending_fields": [], "ask_counts": {},
                 "messages": [{"role": "assistant", "content": message}]}
 
@@ -89,6 +89,9 @@ def build_graph(deps: Deps, checkpointer=None):
         known = HouseholdInfo(**(state.get("household") or {}))
         result = deps.understand(state["messages"], known, pending)
         update = {"household": merge(known, result.household).model_dump()}
+        if result.self_harm_risk:
+            # 위기 감지 두 번째 방어선: 규칙이 못 잡은 문맥 의존 표현("그냥 끝낼래요")을 LLM 이 봄 → 규칙과 같은 멈춤 안내
+            return update | {"crisis": "suicide", "crisis_level": "stop", "crisis_by": "model", "notice": ""}
         if pending and not result.new_question:
             # 되묻기에 대한 답이면 의도·원래 질문·검색어는 그대로 둔다 ("서울이요"로 검색하지 않도록)
             update["intent"] = "eligibility"
@@ -99,6 +102,8 @@ def build_graph(deps: Deps, checkpointer=None):
         return update
 
     def route_after_understand(state: ChatState) -> str:
+        if state.get("crisis_level") == "stop":  # LLM 이 자해 위험을 봄 (규칙이 못 잡은 표현)
+            return "crisis_handler"
         return "condition_check" if state["intent"] == "eligibility" else "retrieve"
 
     def condition_check_node(state: ChatState) -> dict:
@@ -154,9 +159,9 @@ def build_graph(deps: Deps, checkpointer=None):
     def generate_node(state: ChatState) -> dict:
         """근거 청크(+ 판정 결과)로 답변을 만든다.
 
-        판정표·계산 근거·출처·면책 안내는 코드가 만들어 붙이고(app/chat/format.py), Claude 는 설명만 쓴다.
+        판정표·계산 근거·출처·면책 안내는 코드가 만들어 붙이고(app/chat/format.py), LLM 은 설명만 쓴다.
 
-        스트리밍(Chatbot.stream): 위기 안내·판정표를 먼저 보내고, Claude 의 설명은 써지는 대로 보낸다.
+        스트리밍(Chatbot.stream): 위기 안내·판정표를 먼저 보내고, LLM 의 설명은 써지는 대로 보낸다.
         get_stream_writer() 는 stream_mode="custom" 으로 실행할 때만 실제로 보내고, invoke 일 때는 아무것도 안 한다.
         """
         write = get_stream_writer()
@@ -186,7 +191,7 @@ def build_graph(deps: Deps, checkpointer=None):
     graph.add_edge(START, "crisis_check")
     graph.add_conditional_edges("crisis_check", route_after_crisis, ["crisis_handler", "understand"])
     graph.add_edge("crisis_handler", END)
-    graph.add_conditional_edges("understand", route_after_understand, ["condition_check", "retrieve"])
+    graph.add_conditional_edges("understand", route_after_understand, ["crisis_handler", "condition_check", "retrieve"])
     graph.add_conditional_edges("condition_check", route_after_check, ["ask_condition", "give_up", "eligibility_check"])
     graph.add_edge("give_up", END)
     graph.add_edge("ask_condition", "crisis_check")  # 되묻기 루프 (답도 위기 신호부터 살핌)
@@ -198,7 +203,7 @@ def build_graph(deps: Deps, checkpointer=None):
 
 
 def default_deps() -> Deps:
-    """실제로 쓰는 기능: Claude(이해·답변) + PostgreSQL(검색·판정)."""
+    """실제로 쓰는 기능: 로컬 LLM(이해·답변) + PostgreSQL(검색·판정)."""
     from app.chat.understand import understand
     from app.config import YEAR
     from app.database import SessionLocal

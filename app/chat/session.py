@@ -68,7 +68,7 @@ class Chatbot:
     def is_waiting(self, config: dict) -> bool:
         """되묻는 중인가 = 멈춘 노드가 interrupt(질문)를 남겼나.
 
-        "남은 노드가 있나(.next)"로 보면 안 된다 — Claude 오류·연결 끊김으로 노드가 중간에 실패해도 .next 가 남는다.
+        "남은 노드가 있나(.next)"로 보면 안 된다 — LLM 오류·연결 끊김으로 노드가 중간에 실패해도 .next 가 남는다.
         그때 다음 메시지를 되묻기 답(resume)으로 넣으면 새 질문은 버려지고 실패한 앞 질문이 다시 실행된다.
         """
         return any(task.interrupts for task in self.graph.get_state(config).tasks)
@@ -82,7 +82,7 @@ class Chatbot:
         """send 의 스트리밍판 — 답이 써지는 대로 글 조각(str)을 내보내고, 맨 끝에 완성된 Reply 를 하나 내보낸다.
 
         글 조각은 미리 보기용이다. 화면은 마지막 Reply.text(출처·면책 안내·[p.쪽] 표시까지 붙은 답)로 바꿔 보여 준다.
-        되묻기·자살 신호 안내처럼 Claude 가 쓰지 않는 답은 글 조각 없이 Reply 만 나온다.
+        되묻기·자살 신호 안내처럼 LLM 이 쓰지 않는 답은 글 조각 없이 Reply 만 나온다.
         """
         started = time.perf_counter()
         self.forget_idle()

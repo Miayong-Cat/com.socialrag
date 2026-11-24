@@ -78,11 +78,11 @@ def crisis_stopped(t: Turn) -> bool:
 def turn_kind(t: Turn) -> str:
     """턴 종류 — 응답 시간이 하는 일에 따라 크게 다르므로 나눠서 본다."""
     if t.error:
-        return "실패"              # 오류로 답하지 못함 (Claude 오류·연결 끊김 등)
+        return "실패"              # 오류로 답하지 못함 (LLM 오류·연결 끊김 등)
     if crisis_stopped(t):
-        return "위기 중단"         # 규칙만 — Claude 호출 없음
+        return "위기 중단"         # 규칙만 — LLM 호출 없음
     if t.waiting:
-        return "되묻기"            # 알아듣기(Claude 1회)만
+        return "되묻기"            # 알아듣기(LLM 1회)만
     if t.eligibility_result:
         return "판정 + 답변"       # 알아듣기 + 판정 + 검색 + 답변
     return "설명 답변"             # 알아듣기 + 검색 + 답변

@@ -2,7 +2,7 @@
 
 - ApiClient 가 실제 FastAPI 앱(메모리 DB)과 주고받는 모양이 맞는지
 - Streamlit 화면이 API 응답을 제대로 그리는지 — streamlit.testing 의 AppTest 로 브라우저 없이 실행,
-  API 는 가짜로 바꿔 끼운다 (서버·Claude·DB 불필요)
+  API 는 가짜로 바꿔 끼운다 (서버·LLM·DB 불필요)
 
 실행:
     pytest tests/test_frontend.py
@@ -156,7 +156,7 @@ def test_search_tab(fake_api):
 def test_chat_error_is_shown_and_not_recorded(fake_api, monkeypatch):
     """API 실패(예: 키 오류 503): 에러를 보여 주고, 실패한 질문은 기록에 남기지 않는다."""
     def fail(self, message, thread_id=None):
-        raise ApiError("[503] Claude API 키가 없거나 잘못됐습니다")
+        raise ApiError("[503] Ollama 에 연결하지 못했습니다")
         yield  # 제너레이터로 만들기 위한 줄 (실행되지 않음)
 
     monkeypatch.setattr(ApiClient, "chat_stream", fail)

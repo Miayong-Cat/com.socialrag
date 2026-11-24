@@ -1,7 +1,7 @@
 """챗봇 그래프 테스트 (대상: app/chat/graph.py, session.py, state.py).
 
-Claude·DB 대신 가짜 함수를 넣어 "그래프가 어느 길로 가는지"만 검증한다 (API 키·Docker 불필요).
-가짜 understand 는 미리 정해 둔 Understanding 을 차례로 돌려준다 = "Claude 가 이렇게 알아들었다"고 가정.
+LLM·DB 대신 가짜 함수를 넣어 "그래프가 어느 길로 가는지"만 검증한다 (Ollama·Docker 불필요).
+가짜 understand 는 미리 정해 둔 Understanding 을 차례로 돌려준다 = "LLM 이 이렇게 알아들었다"고 가정.
 
 실행:
     pytest tests/test_chat_graph.py
@@ -26,7 +26,7 @@ class Fake:
         self.judged = []
         self.answered = []
         self.logs: list[dict] = []
-        self.sources = [Source(page=131, section="Ⅲ. 소득조사", quote="30% 공제")]  # 가짜 Claude 가 인용한 문장
+        self.sources = [Source(page=131, section="Ⅲ. 소득조사", quote="30% 공제")]  # 가짜 LLM 이 인용한 문장
 
     def understand(self, messages, known, asked):
         return self.understandings.pop(0)
@@ -41,7 +41,7 @@ class Fake:
 
     def answer(self, question, passages, facts, on_text=None):
         self.answered.append((question, facts))
-        if on_text:  # 가짜 Claude 도 두 조각으로 나눠 "스트리밍"한다
+        if on_text:  # 가짜 LLM 도 두 조각으로 나눠 "스트리밍"한다
             on_text("설명")
             on_text("입니다.")
         return Answer(text="설명입니다.", sources=self.sources)
@@ -217,7 +217,7 @@ def test_crisis_checked_in_condition_answers():
 
 
 def test_uncited_answer_gets_warning():
-    """Claude 답변에 지침서 인용이 하나도 없으면 경고를 붙인다 (환각 방지)."""
+    """LLM 답변에 지침서 인용이 하나도 없으면 경고를 붙인다 (환각 방지)."""
     fake = Fake([u("info")])
     fake.sources = []
     reply = fake.bot().send("t", "기초연금은 얼마인가요?")
@@ -245,7 +245,7 @@ def test_turns_are_logged():
 
 
 def test_stream_sends_pieces_then_reply():
-    """stream: 판정표를 먼저, Claude 설명은 조각으로, 맨 끝에 send 와 같은 Reply. 되묻기 턴은 Reply 만."""
+    """stream: 판정표를 먼저, LLM 설명은 조각으로, 맨 끝에 send 와 같은 Reply. 되묻기 턴은 Reply 만."""
     full = dict(region="서울", earned_income=0, housing=0, general=0, financial=0, car_full_rate=0, debt=0)
     fake = Fake([u("eligibility", **full), u("eligibility", size=1)])
     bot = fake.bot()
@@ -282,7 +282,7 @@ def test_chat_stream_api(client):
 def test_basis_explains_work_deduction():
     """계산 근거에 급여별 근로소득공제와 근거 쪽 — 의료급여만 공제가 없는 이유도 코드가 적는다.
 
-    (이유가 안 보이면 Claude 가 맞는 판정을 "다시 확인하라"고 의심하는 설명을 썼다)
+    (이유가 안 보이면 LLM 이 맞는 판정을 "다시 확인하라"고 의심하는 설명을 썼다)
     """
     worker = {"earned_income": 1_100_000, "asset_conversion": 0, "income_ratio": 32, "source_page": 14}
     basis = format_basis([
@@ -294,18 +294,15 @@ def test_basis_explains_work_deduction():
     assert "근로소득공제" not in format_basis([JUDGEMENT])  # 근로소득이 없으면 공제 설명도 없음
 
 
-def test_claude_failure_is_503_not_500(client):
-    """Claude API 가 실패하면(크레딧 부족·연결 실패 등) 500 대신 503 + 이유. 스트리밍은 error 줄."""
+def test_llm_failure_is_503_not_500(client):
+    """로컬 LLM 이 실패하면(Ollama 꺼짐·모델 없음 등) 500 대신 503 + 이유. 스트리밍은 error 줄."""
     import json
-
-    import anthropic
-    import httpx
 
     from app.main import app
     from app.routes.chat import get_chatbot
 
     def fail(*args, **kwargs):
-        raise anthropic.APIConnectionError(request=httpx.Request("POST", "https://api.anthropic.com"))
+        raise ConnectionError("Failed to connect to Ollama")
 
     fake = Fake([])
     fake.understand = fail
@@ -313,17 +310,17 @@ def test_claude_failure_is_503_not_500(client):
     app.dependency_overrides[get_chatbot] = lambda: bot
 
     response = client.post("/api/chat", json={"message": "받을 수 있나요?"})
-    assert response.status_code == 503 and "Claude API 오류" in response.json()["detail"]
+    assert response.status_code == 503 and "Ollama" in response.json()["detail"]
 
     events = [json.loads(line) for line in client.post("/api/chat/stream", json={"message": "받을 수 있나요?"}).text.splitlines()]
-    assert events[-1]["type"] == "error" and "Claude API 오류" in events[-1]["message"]
+    assert events[-1]["type"] == "error" and "Ollama" in events[-1]["message"]
 
 
 # ── 독립 리뷰에서 찾은 상태 버그 (회귀 테스트) ─────────────────
 
 
 def test_failed_turn_does_not_swallow_next_question():
-    """답변 생성이 실패하면(Claude 529·연결 끊김) 노드가 남는다. 다음 메시지는 되묻기 답이 아니라 새 질문이어야 한다.
+    """답변 생성이 실패하면(LLM 오류·연결 끊김) 노드가 남는다. 다음 메시지는 되묻기 답이 아니라 새 질문이어야 한다.
 
     (전에는 남은 노드를 "되묻는 중"으로 보고 resume → 새 질문은 버려지고 실패한 앞 질문이 다시 실행됐다)
     """
@@ -382,7 +379,7 @@ WORKER = dict(size=1, region="서울", earned_income=1_100_000, housing=0, gener
 def test_unknown_deduction_is_assumed_after_two_asks():
     """공제 유형에 "모르겠어요"를 반복하면 MAX_ASKS 번만 묻고, 일반 공제로 가정해 판정 + "가정함" 안내.
 
-    (전에는 같은 질문을 끝없이 반복했고, 매 턴 Claude 를 불렀다)
+    (전에는 같은 질문을 끝없이 반복했고, 매 턴 LLM 을 불렀다)
     """
     fake = Fake([u("eligibility", **WORKER), u("eligibility"), u("eligibility")])
     bot = fake.bot()
@@ -393,7 +390,7 @@ def test_unknown_deduction_is_assumed_after_two_asks():
     assert not judged.waiting and judged.eligibility
     assert fake.judged[0].earners[0].deduction is WorkDeduction.GENERAL
     assert ASSUMPTION_NOTES["deduction"] in judged.text
-    assert ASSUMPTION_NOTES["deduction"] in fake.answered[0][1]              # Claude 에게도 가정했다고 알림
+    assert ASSUMPTION_NOTES["deduction"] in fake.answered[0][1]              # LLM 에게도 가정했다고 알림
 
 
 def test_gives_up_when_required_condition_never_answered():
@@ -426,7 +423,7 @@ def test_new_question_while_asking_escapes():
 
 
 def test_failed_turn_is_logged_and_stream_reports_error(client):
-    """실패한 턴도 ai_search_logs 에 error 와 함께 기록, 스트리밍은 Claude 오류가 아니어도 error 줄로 알린다."""
+    """실패한 턴도 ai_search_logs 에 error 와 함께 기록, 스트리밍은 LLM 오류가 아니어도 error 줄로 알린다."""
     import json
 
     from app.main import app
@@ -493,7 +490,7 @@ def test_idle_threads_are_forgotten():
 
 
 def test_message_length_is_capped(client):
-    """메시지 글자 수 상한 — 긴 글 한 번이 매 턴 Claude 입력·메모리를 계속 키우지 않게."""
+    """메시지 글자 수 상한 — 긴 글 한 번이 매 턴 LLM 입력·메모리를 계속 키우지 않게."""
     from app.main import app
     from app.routes.chat import MAX_MESSAGE_CHARS, get_chatbot
 
@@ -524,28 +521,55 @@ MUST_STOP = [
     "자살 시도자 지원 받을 수 있나요? 제가 어제 시도했어요", "자살예방센터에 전화했는데 그래도 죽고 싶어요",
     "자살 유가족인데 저도 따라가고 싶어요",
 ]
-# 제도·사업·통계를 묻는 말 — 109·119 안내를 붙이고 질문에도 답한다
-INFO_QUESTIONS = [
-    "자살예방 상담 지원 제도가 있나요?", "자살 유가족 지원 사업이 있나요?", "자살 시도자 지원 프로그램 있나요?",
-    "자해 청소년 지원 기관 알려주세요", "자살예방센터 전화번호가 뭐예요", "자살 고위험군 지원 정책",
-    "자살률 통계가 궁금해요", "자살 유족은 급여 받을 수 있나요",
+# 6차 독립 리뷰: 제도 이름이 들어 있어 예외로 낮아지던 위기 메시지 — 예외를 없애 모두 멈춤
+MUST_STOP += [
+    "자살예방센터 전화해도 소용없어요 그냥 끝낼래요", "자살 시도자 지원 받으려면 다시 해야 하나요", "자살 시도자인데 또 해볼 거예요",
+    "자살 유가족인데 저 사람 곁으로 가고 파요", "자살예방 상담 받았는데 이제 다 소용없어요 안녕",
+    "자살률 통계 같은 거 말고 진짜 도와주세요 더는 못 버티겠어요", "자살 고위험군 판정받음 이번 주말에 할 거임",
+    "자살예방센터 번호 주세요 옥상에 올라와 있어요", "자해 청소년 지원 받는데 또 그었어요",
+    "자해 예방 프로그램 들어도 멈출 수가 없어요", "자살예방 상담전화 109 연결 안돼요 이제 끝이에요",
+    "자살 시도자 지원 받고 있는데 수면제 모았어요",
+    # 원래 규칙이 못 잡던 분명한 표현 (규칙 보강)
+    "그만 살래요", "살 이유가 없어요", "수면제를 모으고 있어요", "번개탄 사왔어요", "목을 매고 싶어요", "세상 하직하고 싶다",
+    "삶을 마감하고 싶어요", "생을 끝내고 싶어요", "이 고통 끝내고 싶어요", "다 놓고 싶어요", "없어지고 싶어요", "영원히 잠들고 싶어요",
+    "뒤지고 싶다", "디지고싶다", "죽고시퍼", "콱 죽어야지", "죽어야겠다", "쥬금 마렵다", "자1살 하고싶다", "ㅈㅅ하고 싶다",
+    "suicide 하고 싶어요", "I want to kill myself 지원", "kms 급여 끊김", "I want to die",
+    # 제도를 묻는 말도 멈춘다 — 예외를 두면 위기 메시지가 샜다 (멈춤 안내에도 109 가 있음)
+    "자살예방 상담 지원 제도가 있나요?", "자살 유가족 지원 사업이 있나요?", "자살률 통계가 궁금해요",
 ]
+# 키워드로는 오탐이 많아 규칙이 일부러 잡지 않는 문맥 의존 표현 — LLM 의 self_harm_risk(두 번째 방어선)가 맡는다
+CONTEXT_DEPENDENT = ["그냥 끝낼래요", "오늘이 마지막이에요", "멀리 떠날래요 다들 안녕", "한강 가려고요", "더는 못 버티겠어요 지원도 끊기고"]
 
 
-def test_suicide_word_in_program_question_is_notice_not_stop():
-    """'자살예방 지원 제도'처럼 제도를 묻는 말은 109 안내를 붙이고 질문에도 답한다. 본인의 지금 마음이 드러나면 항상 멈춘다."""
-    from app.chat.crisis import SUICIDE_INFO_NOTICE
+def test_suicide_signals_always_stop():
+    """자살·자해 신호는 예외 없이 멈춘다 — 하나라도 새면 실패.
 
-    for question in INFO_QUESTIONS:
-        c = detect(question)
-        assert c and (c.category, c.level) == ("suicide", "notice"), question
+    (제도 질문만 안내+답변으로 낮추는 예외를 두 번 만들었다가 두 번 다 위기 메시지가 샜다 — 4·5·6차 독립 리뷰)
+    """
     for question in MUST_STOP:
         c = detect(question)
-        assert c and (c.category, c.level) == ("suicide", "stop"), question  # 놓치지 않는 쪽 — 하나라도 새면 실패
+        assert c and (c.category, c.level) == ("suicide", "stop"), question
+    for question in CONTEXT_DEPENDENT:                         # 규칙은 안 잡음 — 아래 LLM 방어선 테스트가 맡음
+        assert detect(question) is None, question
 
-    fake = Fake([u("info", query="자살예방 상담 지원")])
-    reply = fake.bot().send("t", "자살예방 상담 지원 제도가 있나요?")
-    assert reply.crisis == "suicide"
-    assert reply.text.startswith(SUICIDE_INFO_NOTICE)          # 안내는 항상 맨 앞
-    assert "설명입니다." in reply.text and fake.searched == ["자살예방 상담 지원"]  # 질문에도 답함
-    assert fake.logs[-1]["intent"] == "info"                   # 로그: 위기 중단이 아니라 답한 턴
+
+def test_model_flagged_self_harm_stops_like_rule():
+    """규칙이 못 잡은 말을 LLM 이 self_harm_risk 로 보면, 규칙과 같은 멈춤 안내 — 검색·답변으로 가지 않는다 (되묻는 중이어도)."""
+    from app.chat.crisis import SUICIDE_MESSAGE
+    from app.chat.understand import Understanding
+
+    risky = Understanding(intent="info", household=HouseholdInfo(), search_query="q", self_harm_risk=True)
+    fake = Fake([risky])
+    bot = fake.bot()
+    reply = bot.send("t", "그냥 오늘이 마지막이에요")
+    state = bot.graph.get_state({"configurable": {"thread_id": "t"}}).values
+    assert reply.text == SUICIDE_MESSAGE and reply.crisis == "suicide" and not reply.waiting
+    assert (state["crisis_level"], state["crisis_by"]) == ("stop", "model")
+    assert fake.searched == [] and fake.answered == []
+    assert fake.logs[-1]["crisis_level"] == "stop" and fake.logs[-1]["intent"] is None
+
+    fake = Fake([u("eligibility", size=1), risky, u("info", query="해산급여")])  # 되묻는 중에
+    bot = fake.bot()
+    assert bot.send("t", "혼자 사는데 받을 수 있나요?").waiting
+    assert bot.send("t", "다 소용없어요 그냥 끝낼래요").text == SUICIDE_MESSAGE
+    assert not bot.send("t", "아이 낳으면 받는 급여는?").waiting    # 다음 질문은 새 질문으로
